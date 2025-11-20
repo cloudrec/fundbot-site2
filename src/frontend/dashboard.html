@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Arbitrage Dashboard (MVP A)</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th,td { border: 1px solid #ddd; padding: 8px; }
+  </style>
+</head>
+<body>
+  <h1>Arbitrage Opportunities (Live)</h1>
+  <div>WS: <span id="ws-status">connecting...</span></div>
+  <table id="opps">
+    <thead><tr><th>Time</th><th>Type</th><th>Exchanges</th><th>Symbol</th><th>Spread %</th><th>Size USD</th></tr></thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    const wsUrl = (location.hostname ? `ws://${location.hostname}:${3004}` : 'ws://localhost:3004');
+    const ws = new WebSocket(wsUrl);
+    ws.onopen = () => document.getElementById('ws-status').innerText = 'open';
+    ws.onclose = () => document.getElementById('ws-status').innerText = 'closed';
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'opportunity') {
+          const opp = msg.data;
+          const tr = document.createElement('tr');
+          tr.innerHTML = `<td>${new Date(opp.createdAt).toLocaleTimeString()}</td>
+                          <td>${opp.type}</td>
+                          <td>${opp.exchanges.join(' / ')}</td>
+                          <td>${opp.symbol}</td>
+                          <td>${opp.spread.toFixed(3)}</td>
+                          <td>${opp.sizeUsd}</td>`;
+          document.querySelector('#opps tbody').prepend(tr);
+        }
+      } catch (e) { console.error(e); }
+    };
+  </script>
+</body>
+</html>
