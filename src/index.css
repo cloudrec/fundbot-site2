@@ -1,0 +1,183 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* VisionOS Style Design System */
+/* Glassmorphism with depth and blur effects */
+
+@layer base {
+  :root {
+    /* VisionOS Glass Background */
+    --background: 220 15% 8%;
+    --foreground: 0 0% 98%;
+
+    /* Glass Cards with transparency */
+    --card: 220 15% 12%;
+    --card-foreground: 0 0% 95%;
+
+    /* Glass Popovers */
+    --popover: 220 15% 10%;
+    --popover-foreground: 0 0% 95%;
+
+    /* VisionOS Blue Accent */
+    --primary: 213 94% 68%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Glass Secondary */
+    --secondary: 220 15% 15%;
+    --secondary-foreground: 0 0% 90%;
+
+    /* Muted Glass */
+    --muted: 220 15% 18%;
+    --muted-foreground: 0 0% 70%;
+
+    /* VisionOS Purple Accent */
+    --accent: 270 95% 75%;
+    --accent-foreground: 0 0% 100%;
+
+    /* Destructive Red */
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    /* Glass Borders */
+    --border: 220 15% 25%;
+    --input: 220 15% 20%;
+    --ring: 213 94% 68%;
+
+    /* VisionOS Rounded Corners */
+    --radius: 1rem;
+
+    /* Sidebar Glass */
+    --sidebar-background: 220 15% 10%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 213 94% 68%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 15% 18%;
+    --sidebar-accent-foreground: 0 0% 85%;
+
+    /* VisionOS Glass Effects */
+    --glass-bg: 220 15% 12% / 0.8;
+    --glass-border: 0 0% 100% / 0.1;
+    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    --glass-blur: blur(20px);
+    
+    /* VisionOS Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(213 94% 68% / 0.9), hsl(270 95% 75% / 0.9));
+    --gradient-card: linear-gradient(135deg, hsl(220 15% 12% / 0.8), hsl(220 15% 15% / 0.6));
+    
+    --sidebar-border: 220 15% 25%;
+    --sidebar-ring: 213 94% 68%;
+  }
+}
+
+/* VisionOS Components */
+@layer components {
+  /* Glass Card Effect */
+  .glass-card {
+    @apply backdrop-blur-xl bg-card/80 border border-white/10;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  
+  /* Glass Button */
+  .glass-button {
+    @apply backdrop-blur-xl bg-primary/20 border border-white/20 hover:bg-primary/30;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  
+  .glass-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+  
+  /* VisionOS Input */
+  .vision-input {
+    @apply backdrop-blur-xl bg-input/50 border border-white/10 focus:border-primary/50;
+    box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  
+  /* Floating Panel */
+  .floating-panel {
+    @apply backdrop-blur-2xl bg-card/70 border border-white/10 rounded-2xl;
+    box-shadow: 0 16px 64px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  }
+  
+  /* VisionOS Sidebar */
+  .vision-sidebar {
+    @apply backdrop-blur-2xl bg-sidebar-background/80 border-r border-white/10;
+    box-shadow: 4px 0 32px rgba(0, 0, 0, 0.2);
+  }
+  
+  /* Glow Effect */
+  .glow-primary {
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.3), 0 0 40px hsl(var(--primary) / 0.1);
+  }
+  
+  .glow-accent {
+    box-shadow: 0 0 20px hsl(var(--accent) / 0.3), 0 0 40px hsl(var(--accent) / 0.1);
+  }
+  
+  /* VisionOS Animation */
+  .vision-animate {
+    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+  
+  /* Trading Card Styles */
+  .trading-card {
+    @apply glass-card p-6 rounded-2xl vision-animate;
+  }
+  
+  .trading-card:hover {
+    @apply glow-primary;
+    transform: translateY(-2px) scale(1.02);
+  }
+  
+  /* Status Indicators */
+  .status-live {
+    @apply bg-green-500/20 text-green-400 border border-green-500/30 glow-accent;
+  }
+  
+  .status-error {
+    @apply bg-red-500/20 text-red-400 border border-red-500/30;
+  }
+  
+  /* VisionOS Button Variants */
+  .btn-vision-primary {
+    @apply glass-button bg-gradient-to-r from-primary/80 to-accent/80 text-white font-medium;
+  }
+  
+  .btn-vision-secondary {
+    @apply glass-button bg-secondary/60 text-secondary-foreground;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    background-image: 
+      radial-gradient(circle at 20% 80%, hsl(213 94% 68% / 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, hsl(270 95% 75% / 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 40% 40%, hsl(220 15% 12% / 0.8) 0%, transparent 50%);
+  }
+  
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-muted/30;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-primary/50 rounded-full;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-primary/70;
+  }
+}

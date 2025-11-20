@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Выход из системы</title>
+    <style>
+        body { font-family: Arial; text-align: center; padding: 50px; background: #f5f5f5; }
+        .logout-box { background: white; padding: 30px; border-radius: 10px; max-width: 400px; margin: 0 auto; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .logout-btn { background: #dc2626; color: white; padding: 15px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin: 10px; }
+        .logout-btn:hover { background: #b91c1c; }
+        .cancel-btn { background: #6b7280; color: white; padding: 15px 30px; border: none; border-radius: 5px; font-size: 16px; cursor: pointer; margin: 10px; }
+        .cancel-btn:hover { background: #4b5563; }
+    </style>
+</head>
+<body>
+    <div class="logout-box">
+        <h1>🚪 Выход из системы</h1>
+        <p>Вы уверены, что хотите выйти из аккаунта?</p>
+        <button class="logout-btn" onclick="logout()">Да, выйти</button>
+        <button class="cancel-btn" onclick="goBack()">Отмена</button>
+    </div>
+    
+    <script>
+        function logout() {
+            // Очищаем все данные
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Очищаем cookies
+            document.cookie.split(";").forEach(function(c) { 
+                document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+            });
+            
+            alert("Вы успешно вышли из системы!");
+            window.location.href = "/";
+        }
+        
+        function goBack() {
+            window.history.back();
+        }
+    </script>
+</body>
+</html>

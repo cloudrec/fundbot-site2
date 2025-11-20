@@ -1,0 +1,27 @@
+-- Добавление уникального ключа для таблицы настроек торговли
+-- Сначала удаляем существующий constraint если есть
+ALTER TABLE public.trading_settings_2025_11_06_12_23 
+DROP CONSTRAINT IF EXISTS unique_user_exchange;
+
+-- Добавляем уникальный constraint для user_id и exchange
+ALTER TABLE public.trading_settings_2025_11_06_12_23 
+ADD CONSTRAINT unique_user_exchange UNIQUE (user_id, exchange);
+
+-- Создаем функцию для автоматического заполнения user_id в настройках
+CREATE OR REPLACE FUNCTION public.set_user_id_for_settings()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF NEW.user_id IS NULL THEN
+        NEW.user_id = auth.uid();
+    END IF;
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Создаем триггер для автоматического заполнения user_id
+DROP TRIGGER IF EXISTS set_user_id_settings_trigger ON public.trading_settings_2025_11_06_12_23;
+CREATE TRIGGER set_user_id_settings_trigger
+    BEFORE INSERT OR UPDATE ON public.trading_settings_2025_11_06_12_23
+    FOR EACH ROW
+    EXECUTE FUNCTION public.set_user_id_for_settings();

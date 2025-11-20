@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Codex Агент — Панель управления</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f5f5f5;
+        padding: 20px;
+    }
+    #container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 25px;
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    textarea {
+        width: 100%;
+        height: 120px;
+        padding: 10px;
+        font-size: 15px;
+        border-radius: 5px;
+        border: 1px solid #ccc;
+        resize: vertical;
+    }
+    button {
+        padding: 10px 20px;
+        margin-top: 10px;
+        font-size: 16px;
+        cursor: pointer;
+        background: #007bff;
+        border: none;
+        color: white;
+        border-radius: 5px;
+    }
+    button:hover {
+        background: #0056b3;
+    }
+    pre {
+        background: #222;
+        color: #0f0;
+        padding: 15px;
+        border-radius: 5px;
+        margin-top: 15px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .shortcut-btn {
+        margin-top: 5px;
+        margin-right: 5px;
+        padding: 5px 10px;
+        font-size: 14px;
+        background: #6c757d;
+    }
+</style>
+</head>
+
+<body>
+<div id="container">
+    <h2>Панель Codex-агента</h2>
+
+    <label>Задача для агента:</label>
+    <textarea id="task"></textarea>
+
+    <button onclick="sendTask()">Отправить задачу</button>
+    <button onclick="sendLlama()" style="background:#28a745; margin-left:10px;">
+        Отправить в LLaMA
+    </button>
+
+    <h3>Быстрые команды:</h3>
+    <h3>Работа с файлами:</h3>
+    <button class="shortcut-btn" onclick="openReadModal()">📄 Открыть файл</button>
+    <button class="shortcut-btn" onclick="openWriteModal()">💾 Сохранить файл</button>
+
+    <!-- Модальное окно чтения файла -->
+    <div id="readModal" style="display:none; background:#fff; padding:20px; border-radius:8px; box-shadow:0 0 10px #0002; position:fixed; top:20%; left:50%; transform:translateX(-50%); width:400px;">
+        <h3>Открыть файл</h3>
+        <input id="readPath" style="width:100%; padding:8px;" placeholder="/var/www/файл">
+        <button onclick="readFile()">Читать</button>
+        <button onclick="closeReadModal()">Закрыть</button>
+    </div>
+
+    <!-- Модальное окно записи файла -->
+    <div id="writeModal" style="display:none; background:#fff; padding:20px; border-radius:8px; box-shadow:0 0 10px #0002; position:fixed; top:20%; left:50%; transform:translateX(-50%); width:400px;">
+        <h3>Сохранить файл</h3>
+        <input id="writePath" style="width:100%; padding:8px;" placeholder="/var/www/файл">
+        <textarea id="writeContent" style="height:120px;"></textarea>
+        <button onclick="writeFile()">Сохранить</button>
+        <button onclick="closeWriteModal()">Закрыть</button>
+    </div>
+
+    <button class="shortcut-btn" onclick="setTask('Прочитай файл /var/www/fundbot.win/index.html')">Прочитать файл</button>
+    <button class="shortcut-btn" onclick="setTask('Исправь ошибки в файле /var/www/fundbot.win/backend/server.js')">Исправить файл</button>
+    <button class="shortcut-btn" onclick="setTask('Выполни команду ls -la /var/www/fundbot.win')">Linux: ls</button>
+    <button class="shortcut-btn" onclick="setTask('Перезапусти nginx. Команда: sudo systemctl restart nginx')">Перезапустить nginx</button>
+
+    <h3>Ответ Codex-агента:</h3>
+    <pre id="response">Ожидание команды...</pre>
+</div>
+
+<script>
+function setTask(text) {
+    document.getElementById('task').value = text;
+}
+
+function sendTask() {
+    const task = document.getElementById('task').value.trim();
+    if (!task) return alert("Введите задачу!");
+
+    document.getElementById('response').textContent = "Выполняю...";
+
+    fetch('https://fundbot.win/codex/', {  <!-- Заменили на HTTPS -->
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task })
+    })
+    .then(res => res.json())
+    .then(data => {
+        document.getElementById('response').textContent = data.result;
+    })
+    .catch(err => {
+        document.getElementById('response').textContent = "Ошибка: " + err;
+    });
+}
+
+function openReadModal(){ document.getElementById('readModal').style.display='block'; }
+function closeReadModal(){ document.getElementById('readModal').style.display='none'; }
+
+function openWriteModal(){ document.getElementById('writeModal').style.display='block'; }
+function closeWriteModal(){ document.getElementById('writeModal').style.display='none'; }
+
+// === ЧИТАТЬ ФАЙЛ ===
+function readFile() {
+    const path = document.getElementById('readPath').value;
+    fetch('https://fundbot.win/codex/read', {  <!-- Заменили на HTTPS -->
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ path })
+    })
+    .then(r => r.json())
+    .then(d => {
+        document.getElementById('response').textContent = d.content;
+        closeReadModal();
+    });
+}
+
+// === ЗАПИСАТЬ ФАЙЛ ===
+function writeFile() {
+    const path = document.getElementById('writePath').value;
+    const content = document.getElementById('writeContent').value;
+
+    fetch('https://fundbot.win/codex/write', {  <!-- Заменили на HTTPS -->
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ path, content })
+    })
+    .then(r => r.json())
+    .then(d => {
+        document.getElementById('response').textContent = d.status;
+        closeWriteModal();
+    });
+}
+
+function sendLlama() {
+    const task = document.getElementById('task').value.trim();
+    if (!task) return alert("Введите задачу!");
+
+    document.getElementById('response').textContent = "LLaMA думает...";
+
+    fetch('https://fundbot.win/llama/', {  <!-- Заменили на HTTPS -->
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.error) {
+            document.getElementById('response').textContent = "Ошибка LLaMA: " + data.error;
+        } else {
+            document.getElementById('response').textContent = data.result;
+        }
+    })
+    .catch(err => {
+        document.getElementById('response').textContent = "Ошибка: " + err;
+    });
+}
+</script>
+
+</body>
+</html>

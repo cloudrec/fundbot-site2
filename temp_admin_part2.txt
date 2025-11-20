@@ -1,0 +1,131 @@
+                            <SelectItem value="free:0">Отменить</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          variant={user.user_profiles?.is_admin ? "destructive" : "default"}
+                          size="sm"
+                          onClick={() => toggleUserAdmin(user.id, user.user_profiles?.is_admin)}
+                        >
+                          {user.user_profiles?.is_admin ? <UserX className="h-4 w-4" /> : <UserCheck className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Payments Tab */}
+          <TabsContent value="payments">
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle>История платежей</CardTitle>
+                <CardDescription>Все платежи и транзакции в системе</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {payments.map(payment => (
+                    <div key={payment.id} className="flex items-center justify-between p-4 bg-gray-700 rounded-lg">
+                      <div>
+                        <p className="font-semibold">
+                          ${payment.amount_usd} ({payment.amount_crypto} {payment.currency})
+                        </p>
+                        <p className="text-sm text-gray-400">
+                          {payment.subscription_plans?.name} • {new Date(payment.created_at).toLocaleDateString('ru-RU')}
+                        </p>
+                      </div>
+                      <Badge variant={
+                        payment.status === 'completed' ? 'default' :
+                        payment.status === 'pending' ? 'secondary' : 'destructive'
+                      }>
+                        {payment.status === 'completed' ? 'Оплачено' :
+                         payment.status === 'pending' ? 'Ожидает' : 'Отклонено'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Plans Tab */}
+          <TabsContent value="plans">
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle>Управление тарифами</CardTitle>
+                <CardDescription>Настройка тарифных планов и цен</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {plans.map(plan => (
+                    <Card key={plan.id} className="bg-gray-700 border-gray-600">
+                      <CardHeader>
+                        <CardTitle className="flex items-center justify-between">
+                          {plan.name}
+                          <Badge variant={plan.is_active ? 'default' : 'secondary'}>
+                            {plan.is_active ? 'Активен' : 'Отключен'}
+                          </Badge>
+                        </CardTitle>
+                        <CardDescription>{plan.description}</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>Цена USD</Label>
+                            <Input
+                              type="number"
+                              value={plan.price_usd}
+                              onChange={(e) => updatePlan(plan.id, { price_usd: parseFloat(e.target.value) })}
+                              className="bg-gray-600"
+                            />
+                          </div>
+                          <div>
+                            <Label>Дней</Label>
+                            <Input
+                              type="number"
+                              value={plan.duration_days}
+                              onChange={(e) => updatePlan(plan.id, { duration_days: parseInt(e.target.value) })}
+                              className="bg-gray-600"
+                            />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <Label>Макс. бирж</Label>
+                            <Input
+                              type="number"
+                              value={plan.max_exchanges}
+                              onChange={(e) => updatePlan(plan.id, { max_exchanges: parseInt(e.target.value) })}
+                              className="bg-gray-600"
+                            />
+                          </div>
+                          <div>
+                            <Label>Сделок в день</Label>
+                            <Input
+                              type="number"
+                              value={plan.max_daily_trades}
+                              onChange={(e) => updatePlan(plan.id, { max_daily_trades: parseInt(e.target.value) })}
+                              className="bg-gray-600"
+                            />
+                          </div>
+                        </div>
+                        <Button
+                          variant={plan.is_active ? "destructive" : "default"}
+                          onClick={() => updatePlan(plan.id, { is_active: !plan.is_active })}
+                          className="w-full"
+                        >
+                          {plan.is_active ? 'Отключить' : 'Активировать'}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}

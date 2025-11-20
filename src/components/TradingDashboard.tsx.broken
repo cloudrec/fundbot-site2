@@ -1,0 +1,201 @@
+import React from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useAdminCheck } from '@/hooks/useAdminCheck';
+import HomeTab from '@/components/tabs/HomeTab';
+import ConfigTab from '@/components/tabs/ConfigTab';
+import ApiKeysManager from '@/components/tabs/ApiKeysManager';
+import TradingTab from '@/components/tabs/TradingTab';
+import CombatArbitrageWithAutoScan from '@/components/tabs/CombatArbitrageWithAutoScan';
+import AdvancedArbitrageTrading from '@/components/tabs/AdvancedArbitrageTrading';
+import FundingBot from "@/components/tabs/FundingBot";
+import HourlyFundingBot from "@/components/tabs/HourlyFundingBot";
+import RealTriangularArbitrage from '@/components/tabs/RealTriangularArbitrage';
+import TriangularArbitrage from '@/components/tabs/TriangularArbitrage';
+import SubscriptionTab from '@/components/tabs/SubscriptionTab';
+import AdminPanel from '@/components/admin/AdminPanel';
+
+const TradingDashboard = () => {
+  const { isAdmin, hasPermission, loading, userEmail } = useAdminCheck();
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-4 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-400 mx-auto mb-4"></div>
+          <p className="text-gray-300">Загрузка системы...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white p-4">
+      <div className="max-w-7xl mx-auto">
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+            🤖 Crypto Trading Bot
+          </h1>
+          <p className="text-gray-300 text-lg">
+            Профессиональная торговая система для криптовалют
+          </p>
+          {isAdmin && (
+            <div className="mt-2">
+              <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500">
+                👑 Администратор: {userEmail}
+              </Badge>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
+          <Tabs defaultValue="home" className="w-full">
+            <TabsList className="w-full bg-gray-700 mb-6 h-auto p-2 flex flex-wrap gap-1 justify-center">
+              <TabsTrigger 
+                value="home" 
+                className="data-[state=active]:bg-gray-600 py-2 px-3 text-xs rounded border border-gray-600 hover:bg-gray-700 transition-colors"
+              >
+                🏠 Главная
+              </TabsTrigger>
+              <TabsTrigger 
+                value="config" 
+                className="data-[state=active]:bg-gray-600 py-2 px-3 text-xs rounded border border-gray-600 hover:bg-gray-700 transition-colors"
+              >
+                ⚙️ Настройки
+              </TabsTrigger>
+              <TabsTrigger 
+                value="api-keys" 
+                className="data-[state=active]:bg-gray-600 py-2 px-3 text-xs rounded border border-gray-600 hover:bg-gray-700 transition-colors"
+              >
+                🔑 API Ключи
+              </TabsTrigger>
+              <TabsTrigger 
+                value="trading" 
+                className="data-[state=active]:bg-gray-600 py-2 px-3 text-xs rounded border border-gray-600 hover:bg-gray-700 transition-colors"
+              >
+                📊 Торговля
+              </TabsTrigger>
+              <TabsTrigger 
+                value="subscription" 
+                className="data-[state=active]:bg-gray-600 py-2 px-3 text-xs rounded border border-gray-600 hover:bg-gray-700 transition-colors"
+              >
+                💎 Подписка
+              </TabsTrigger>
+              <TabsTrigger 
+                value="funding-bot" 
+                className="data-[state=active]:bg-blue-600 py-2 px-3 text-xs rounded border border-blue-600 hover:bg-blue-700 transition-colors"
+              >
+                🚀 Сканирование фандинга
+              <TabsTrigger 
+                value="hourly-funding-bot" 
+                className="data-[state=active]:bg-purple-600 py-2 px-3 text-xs rounded border border-purple-600 hover:bg-purple-700 transition-colors"
+              >
+                value="inter-exchange-arbitrage" 
+                className="data-[state=active]:bg-green-600 py-2 px-3 text-xs rounded border border-green-600 hover:bg-green-700 transition-colors"
+              >
+                💱 Межбиржевой Арбитраж
+              </TabsTrigger>
+              <TabsTrigger 
+                value="triangular-arbitrage" 
+                className="data-[state=active]:bg-purple-600 py-2 px-3 text-xs rounded border border-purple-600 hover:bg-purple-700 transition-colors"
+              >
+                🔺 Треугольный Арбитраж
+              </TabsTrigger>
+              {isAdmin && (
+                <TabsTrigger 
+                  value="admin" 
+                  className="data-[state=active]:bg-red-600 py-2 px-3 text-xs rounded border border-red-600 hover:bg-red-700 transition-colors"
+                >
+                  🛡️ Админка
+                </TabsTrigger>
+              )}
+            </TabsList>
+
+            <TabsContent value="home">
+              <HomeTab />
+            </TabsContent>
+
+            <TabsContent value="config">
+              <ConfigTab />
+            </TabsContent>
+
+            <TabsContent value="api-keys">
+              <ApiKeysManager />
+            </TabsContent>
+
+            <TabsContent value="trading">
+              <TradingTab />
+            </TabsContent>
+
+            <TabsContent value="subscription">
+              <SubscriptionTab />
+            </TabsContent>
+
+            <TabsContent value="funding-bot">
+
+            <TabsContent value="hourly-funding-bot">
+              <HourlyFundingBot />
+            </TabsContent>
+              <FundingBot />
+
+            <TabsContent value="hourly-funding-bot">
+              <HourlyFundingBot />
+            </TabsContent>
+            </TabsContent>
+
+            <TabsContent value="hourly-funding-bot">
+              <HourlyFundingBot />
+            </TabsContent>
+
+            <TabsContent value="inter-exchange-arbitrage">
+              <div className="border border-green-500/30 rounded-lg p-4 bg-green-500/5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Badge variant="outline" className="bg-green-500/20 text-green-300 border-green-500">
+                    💱 МЕЖБИРЖЕВОЙ АРБИТРАЖ
+                  </Badge>
+                  <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500">
+                    БОЕВОЙ РЕЖИМ
+                  </Badge>
+                </div>
+                <AdvancedArbitrageTrading />
+              </div>
+            </TabsContent>
+
+            <TabsContent value="triangular-arbitrage">
+              <div className="border border-purple-500/30 rounded-lg p-4 bg-purple-500/5">
+                <div className="flex items-center gap-2 mb-4">
+                  <Badge variant="outline" className="bg-purple-500/20 text-purple-300 border-purple-500">
+                    🔺 ТРЕУГОЛЬНЫЙ АРБИТРАЖ
+                  </Badge>
+                  <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500">
+                    БОЕВОЙ РЕЖИМ
+                  </Badge>
+                </div>
+                <RealTriangularArbitrage />
+              </div>
+            </TabsContent>
+
+            {isAdmin && (
+              <TabsContent value="admin">
+                <div className="border border-red-500/30 rounded-lg p-4 bg-red-500/5">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Badge variant="outline" className="bg-red-500/20 text-red-300 border-red-500">
+                      👑 АДМИНСКАЯ ПАНЕЛЬ
+                    </Badge>
+                    <Badge variant="outline" className="bg-blue-500/20 text-blue-300 border-blue-500">
+                      Роль: Супер-админ
+                    </Badge>
+                  </div>
+                  <AdminPanel />
+                </div>
+              </TabsContent>
+            )}
+          </Tabs>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default TradingDashboard;

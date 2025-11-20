@@ -1,0 +1,611 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Authorization, X-Client-Info, apikey, Content-Type, X-Application-Name',
+};
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
+  try {
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { action, user_id, order_type = 'LONG', ...params } = await req.json();
+
+    console.log(`🌐 BINANCE FIXED: ${action} - ${order_type} direction`);
+
+    // Получаем API ключи пользователя
+    const { data: apiKeys, error: keysError } = await supabaseClient
+      .from('api_keys_dev')
+      .select('*')
+      .eq('user_id', user_id)
+      .eq('exchange', 'binance')
+      .single();
+
+    if (keysError || !apiKeys) {
+      console.log('❌ BINANCE FIXED: API keys not found');
+      return new Response(
+        JSON.stringify({ success: false, error: 'Binance API ключи не найдены' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Получаем настройки из специальной таблицы Binance
+    const { data: settings, error: settingsError } = await supabaseClient
+      .from('binance_settings_2025_11_10_20_30')
+      .select('*')
+      .eq('user_id', user_id)
+      .single();
+
+    // Если настроек нет, создаем дефолтные
+    let binanceSettings = settings;
+    if (settingsError || !settings) {
+      console.log('🌐 BINANCE FIXED: Creating default settings');
+      await supabaseClient.rpc('upsert_binance_settings', {
+        p_user_id: user_id,
+        p_symbol: 'BTCUSDT',
+        p_leverage: 10,
+        p_risk_percent: 2.00,
+        p_long_tp: 2.00,
+        p_long_sl: 1.00,
+        p_short_tp: 2.00,
+        p_short_sl: 1.00,
+        p_min_order_size: 10.00,
+        p_max_positions: 3,
+        p_enabled: true
+      });
+      
+      // Получаем созданные настройки
+      const { data: createdSettings } = await supabaseClient
+        .from('binance_settings_2025_11_10_20_30')
+        .select('*')
+        .eq('user_id', user_id)
+        .single();
+      
+      binanceSettings = createdSettings;
+    }
+
+    switch (action) {
+      case 'get_balance':
+        return await handleBinanceBalance(apiKeys);
+      
+      case 'place_order_with_tp_sl':
+        return await handleBinanceOrderWithTPSL(apiKeys, binanceSettings, order_type);
+      
+      case 'get_positions':
+        return await handleBinancePositions(apiKeys);
+      
+      case 'close_positions':
+      case 'close_all_positions':
+        return await handleBinanceClosePositions(apiKeys);
+      
+      case 'cancel_orders':
+      case 'cancel_all_orders':
+        return await handleBinanceCancelOrders(apiKeys);
+      
+      default:
+        return new Response(
+          JSON.stringify({ success: false, error: `Неизвестное действие: ${action}` }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+    }
+
+  } catch (error) {
+    console.error('❌ BINANCE FIXED Error:', error.message);
+    return new Response(
+      JSON.stringify({ success: false, error: error.message }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+// Функция создания подписи для Binance API
+async function createBinanceSignature(queryString: string, secret: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const keyData = encoder.encode(secret);
+  const messageData = encoder.encode(queryString);
+  
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    keyData,
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  
+  const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData);
+  const hexSignature = Array.from(new Uint8Array(signature))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+  
+  return hexSignature;
+}
+
+// Получение баланса Binance
+async function handleBinanceBalance(apiKeys: any) {
+  console.log('🌐 BINANCE FIXED: Getting balance');
+  
+  try {
+    const timestamp = Date.now();
+    const queryString = `timestamp=${timestamp}`;
+    const signature = await createBinanceSignature(queryString, apiKeys.api_secret);
+    
+    const response = await fetch(`https://fapi.binance.com/fapi/v2/balance?${queryString}&signature=${signature}`, {
+      method: 'GET',
+      headers: {
+        'X-MBX-APIKEY': apiKeys.api_key,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`Binance API error: ${data.msg || 'Unknown error'}`);
+    }
+
+    // Ищем USDT баланс
+    let usdtBalance = 0;
+    if (Array.isArray(data)) {
+      const usdtAsset = data.find((asset: any) => asset.asset === 'USDT');
+      if (usdtAsset) {
+        usdtBalance = parseFloat(usdtAsset.balance || '0');
+      }
+    }
+    
+    console.log('🌐 BINANCE FIXED: Balance extracted:', usdtBalance);
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        balance: usdtBalance,
+        method: 'fixed_version'
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+    
+  } catch (error) {
+    console.error('❌ BINANCE FIXED balance error:', error.message);
+    return new Response(
+      JSON.stringify({ success: false, error: `Binance balance error: ${error.message}` }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// Размещение ордера с правильным quantity
+async function handleBinanceOrderWithTPSL(apiKeys: any, settings: any, orderType: string = 'LONG') {
+  console.log(`🌐 BINANCE FIXED: Placing ${orderType} order with FIXED QUANTITY`);
+  
+  try {
+    // Получаем баланс
+    const balanceResponse = await handleBinanceBalance(apiKeys);
+    const balanceData = await balanceResponse.json();
+    
+    if (!balanceData.success) {
+      throw new Error('Не удалось получить баланс');
+    }
+    
+    const availableBalance = balanceData.balance;
+    const leverage = parseInt(settings?.leverage || '10');
+    const riskPercent = parseFloat(settings?.risk_percent || '2') / 100;
+    
+    // Рассчитываем размер позиции в USDT
+    let positionSize = availableBalance * riskPercent * leverage;
+    
+    // Минимум 10 USDT для Binance
+    if (positionSize < 10) {
+      positionSize = 10;
+    }
+    
+    console.log(`🌐 BINANCE FIXED: Position Size: ${positionSize} USDT`);
+    
+    // Получаем текущую цену и информацию о символе
+    const symbol = settings?.symbol || 'BTCUSDT';
+    
+    // Получаем информацию о символе для правильного расчета quantity
+    const exchangeInfoResponse = await fetch(`https://fapi.binance.com/fapi/v1/exchangeInfo`);
+    const exchangeInfo = await exchangeInfoResponse.json();
+    
+    const symbolInfo = exchangeInfo.symbols.find((s: any) => s.symbol === symbol);
+    if (!symbolInfo) {
+      throw new Error(`Symbol ${symbol} not found`);
+    }
+    
+    // Получаем фильтры для quantity
+    const lotSizeFilter = symbolInfo.filters.find((f: any) => f.filterType === 'LOT_SIZE');
+    const minQty = parseFloat(lotSizeFilter?.minQty || '0.001');
+    const stepSize = parseFloat(lotSizeFilter?.stepSize || '0.001');
+    
+    console.log(`🌐 BINANCE FIXED: Min Qty: ${minQty}, Step Size: ${stepSize}`);
+    
+    // Получаем текущую цену
+    const tickerResponse = await fetch(`https://fapi.binance.com/fapi/v1/ticker/price?symbol=${symbol}`);
+    const tickerData = await tickerResponse.json();
+    
+    if (!tickerData.price) {
+      throw new Error(`Не удалось получить цену для ${symbol}`);
+    }
+    
+    const currentPrice = parseFloat(tickerData.price);
+    
+    // ПРАВИЛЬНЫЙ расчет quantity
+    const rawQuantity = positionSize / currentPrice;
+    let finalQuantity = Math.max(rawQuantity, minQty);
+    
+    // Округляем до правильного шага
+    finalQuantity = Math.floor(finalQuantity / stepSize) * stepSize;
+    
+    // Убеждаемся что quantity не меньше минимального
+    if (finalQuantity < minQty) {
+      finalQuantity = minQty;
+    }
+    
+    // Округляем до нужного количества знаков
+    const precision = stepSize.toString().split('.')[1]?.length || 0;
+    finalQuantity = parseFloat(finalQuantity.toFixed(precision));
+    
+    console.log(`🌐 BINANCE FIXED: Raw Quantity: ${rawQuantity}, Final Quantity: ${finalQuantity}, Price: ${currentPrice}`);
+    
+    // Рассчитываем TP/SL
+    let takeProfit, stopLoss;
+    if (orderType === 'LONG') {
+      takeProfit = parseFloat(settings?.long_tp || '2') / 100;
+      stopLoss = parseFloat(settings?.long_sl || '1') / 100;
+    } else {
+      takeProfit = parseFloat(settings?.short_tp || '2') / 100;
+      stopLoss = parseFloat(settings?.short_sl || '1') / 100;
+    }
+    
+    // Рассчитываем цены TP и SL
+    let tpPrice, slPrice;
+    if (orderType === 'LONG') {
+      tpPrice = parseFloat((currentPrice * (1 + takeProfit)).toFixed(2));
+      slPrice = parseFloat((currentPrice * (1 - stopLoss)).toFixed(2));
+    } else {
+      tpPrice = parseFloat((currentPrice * (1 - takeProfit)).toFixed(2));
+      slPrice = parseFloat((currentPrice * (1 + stopLoss)).toFixed(2));
+    }
+    
+    console.log(`🌐 BINANCE FIXED: TP: ${tpPrice}, SL: ${slPrice}, Quantity: ${finalQuantity}`);
+    
+    // 1. Размещаем основной ордер
+    const timestamp1 = Date.now();
+    const orderParams = new URLSearchParams({
+      symbol: symbol,
+      side: orderType === 'LONG' ? 'BUY' : 'SELL',
+      type: 'MARKET',
+      quantity: finalQuantity.toString(),
+      timestamp: timestamp1.toString()
+    });
+    
+    const signature1 = await createBinanceSignature(orderParams.toString(), apiKeys.api_secret);
+    orderParams.append('signature', signature1);
+    
+    console.log(`🌐 BINANCE FIXED: Order params: ${orderParams.toString()}`);
+    
+    const orderResponse = await fetch('https://fapi.binance.com/fapi/v1/order', {
+      method: 'POST',
+      headers: {
+        'X-MBX-APIKEY': apiKeys.api_key,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: orderParams.toString()
+    });
+
+    const orderData = await orderResponse.json();
+    
+    console.log('🌐 BINANCE FIXED: Order response:', JSON.stringify(orderData, null, 2));
+    
+    if (!orderResponse.ok) {
+      throw new Error(`Binance order error: ${orderData.msg || 'Unknown error'}`);
+    }
+
+    // 2. Размещаем TP ордер
+    let tpOrderId = null;
+    try {
+      const timestamp2 = Date.now();
+      const tpParams = new URLSearchParams({
+        symbol: symbol,
+        side: orderType === 'LONG' ? 'SELL' : 'BUY',
+        type: 'TAKE_PROFIT_MARKET',
+        quantity: finalQuantity.toString(),
+        stopPrice: tpPrice.toString(),
+        reduceOnly: 'true',
+        timestamp: timestamp2.toString()
+      });
+      
+      const signature2 = await createBinanceSignature(tpParams.toString(), apiKeys.api_secret);
+      tpParams.append('signature', signature2);
+      
+      const tpResponse = await fetch('https://fapi.binance.com/fapi/v1/order', {
+        method: 'POST',
+        headers: {
+          'X-MBX-APIKEY': apiKeys.api_key,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: tpParams.toString()
+      });
+
+      const tpData = await tpResponse.json();
+      if (tpResponse.ok) {
+        tpOrderId = tpData.orderId;
+        console.log('✅ BINANCE FIXED: TP order placed:', tpOrderId);
+      } else {
+        console.log('⚠️ BINANCE FIXED: TP order failed:', tpData.msg);
+      }
+    } catch (tpError) {
+      console.log('⚠️ BINANCE FIXED: TP order error:', tpError.message);
+    }
+
+    // 3. Размещаем SL ордер
+    let slOrderId = null;
+    try {
+      const timestamp3 = Date.now();
+      const slParams = new URLSearchParams({
+        symbol: symbol,
+        side: orderType === 'LONG' ? 'SELL' : 'BUY',
+        type: 'STOP_MARKET',
+        quantity: finalQuantity.toString(),
+        stopPrice: slPrice.toString(),
+        reduceOnly: 'true',
+        timestamp: timestamp3.toString()
+      });
+      
+      const signature3 = await createBinanceSignature(slParams.toString(), apiKeys.api_secret);
+      slParams.append('signature', signature3);
+      
+      const slResponse = await fetch('https://fapi.binance.com/fapi/v1/order', {
+        method: 'POST',
+        headers: {
+          'X-MBX-APIKEY': apiKeys.api_key,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: slParams.toString()
+      });
+
+      const slData = await slResponse.json();
+      if (slResponse.ok) {
+        slOrderId = slData.orderId;
+        console.log('✅ BINANCE FIXED: SL order placed:', slOrderId);
+      } else {
+        console.log('⚠️ BINANCE FIXED: SL order failed:', slData.msg);
+      }
+    } catch (slError) {
+      console.log('⚠️ BINANCE FIXED: SL order error:', slError.message);
+    }
+
+    console.log('✅ BINANCE FIXED: Order placed successfully with TP/SL!');
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        order_id: orderData.orderId,
+        symbol: symbol,
+        side: orderType,
+        quantity: finalQuantity,
+        price: currentPrice,
+        take_profit: tpPrice,
+        stop_loss: slPrice,
+        tp_order_id: tpOrderId,
+        sl_order_id: slOrderId,
+        method: 'fixed_quantity'
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+    
+  } catch (error) {
+    console.error('❌ BINANCE FIXED Order error:', error.message);
+    return new Response(
+      JSON.stringify({ success: false, error: `Binance order error: ${error.message}` }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// Получение позиций
+async function handleBinancePositions(apiKeys: any) {
+  console.log('🌐 BINANCE FIXED: Getting positions');
+  
+  try {
+    const timestamp = Date.now();
+    const queryString = `timestamp=${timestamp}`;
+    const signature = await createBinanceSignature(queryString, apiKeys.api_secret);
+    
+    const response = await fetch(`https://fapi.binance.com/fapi/v2/positionRisk?${queryString}&signature=${signature}`, {
+      method: 'GET',
+      headers: {
+        'X-MBX-APIKEY': apiKeys.api_key,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`Binance positions error: ${data.msg || 'Unknown error'}`);
+    }
+
+    // Фильтруем только открытые позиции
+    const openPositions = data.filter((pos: any) => parseFloat(pos.positionAmt) !== 0);
+    
+    console.log(`🌐 BINANCE FIXED: Found ${openPositions.length} open positions`);
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        positions: openPositions,
+        total_positions: openPositions.length
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+    
+  } catch (error) {
+    console.error('❌ BINANCE FIXED Positions error:', error.message);
+    return new Response(
+      JSON.stringify({ success: false, error: `Binance positions error: ${error.message}` }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// Закрытие позиций
+async function handleBinanceClosePositions(apiKeys: any) {
+  console.log('🌐 BINANCE FIXED: Closing all positions');
+  
+  try {
+    // Получаем открытые позиции
+    const positionsResponse = await handleBinancePositions(apiKeys);
+    const positionsData = await positionsResponse.json();
+    
+    if (!positionsData.success) {
+      throw new Error('Не удалось получить список позиций');
+    }
+    
+    const openPositions = positionsData.positions;
+    
+    if (openPositions.length === 0) {
+      return new Response(
+        JSON.stringify({ success: true, message: 'Нет открытых позиций для закрытия' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    const closeResults = [];
+    
+    // Закрываем каждую позицию
+    for (const position of openPositions) {
+      try {
+        const positionAmt = parseFloat(position.positionAmt);
+        const absQuantity = Math.abs(positionAmt);
+        const closeSide = positionAmt > 0 ? 'SELL' : 'BUY';
+        
+        const timestamp = Date.now();
+        const closeParams = new URLSearchParams({
+          symbol: position.symbol,
+          side: closeSide,
+          type: 'MARKET',
+          quantity: absQuantity.toString(),
+          reduceOnly: 'true',
+          timestamp: timestamp.toString()
+        });
+        
+        const signature = await createBinanceSignature(closeParams.toString(), apiKeys.api_secret);
+        closeParams.append('signature', signature);
+        
+        const response = await fetch('https://fapi.binance.com/fapi/v1/order', {
+          method: 'POST',
+          headers: {
+            'X-MBX-APIKEY': apiKeys.api_key,
+            'Content-Type': 'application/x-www-form-urlencoded'
+          },
+          body: closeParams.toString()
+        });
+
+        const data = await response.json();
+        
+        if (response.ok) {
+          closeResults.push({
+            symbol: position.symbol,
+            success: true,
+            order_id: data.orderId
+          });
+          console.log(`✅ Position ${position.symbol} closed successfully`);
+        } else {
+          closeResults.push({
+            symbol: position.symbol,
+            success: false,
+            error: data.msg
+          });
+          console.log(`❌ Error closing ${position.symbol}: ${data.msg}`);
+        }
+        
+        // Задержка между запросами
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+      } catch (error) {
+        closeResults.push({
+          symbol: position.symbol,
+          success: false,
+          error: error.message
+        });
+        console.log(`❌ Error closing ${position.symbol}: ${error.message}`);
+      }
+    }
+    
+    const successCount = closeResults.filter(r => r.success).length;
+    
+    console.log(`🌐 BINANCE FIXED: Closed ${successCount} of ${closeResults.length} positions`);
+    
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        closed_positions: successCount,
+        total_positions: closeResults.length,
+        results: closeResults
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+    
+  } catch (error) {
+    console.error('❌ BINANCE FIXED Close positions error:', error.message);
+    return new Response(
+      JSON.stringify({ success: false, error: `Binance close positions error: ${error.message}` }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}
+
+// Отмена ордеров
+async function handleBinanceCancelOrders(apiKeys: any) {
+  console.log('🌐 BINANCE FIXED: Canceling orders');
+  
+  try {
+    const timestamp = Date.now();
+    const cancelParams = new URLSearchParams({
+      timestamp: timestamp.toString()
+    });
+    
+    const signature = await createBinanceSignature(cancelParams.toString(), apiKeys.api_secret);
+    cancelParams.append('signature', signature);
+    
+    const response = await fetch('https://fapi.binance.com/fapi/v1/allOpenOrders', {
+      method: 'DELETE',
+      headers: {
+        'X-MBX-APIKEY': apiKeys.api_key,
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: cancelParams.toString()
+    });
+
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(`Binance cancel error: ${data.msg || 'Unknown error'}`);
+    }
+    
+    return new Response(
+      JSON.stringify({
+        success: true,
+        message: 'Все ордера отменены',
+        data: data
+      }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+
+  } catch (error) {
+    console.error('❌ BINANCE FIXED Cancel orders error:', error.message);
+    return new Response(
+      JSON.stringify({ success: false, error: `Binance cancel orders error: ${error.message}` }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+}

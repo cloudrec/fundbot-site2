@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест - Фандинг Арбитраж Бот</title>
+    <style>
+        body {
+            background: #111827;
+            color: white;
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            text-align: center;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+            background: #1f2937;
+            border-radius: 10px;
+        }
+        .status {
+            color: #10b981;
+            font-size: 24px;
+            margin: 20px 0;
+        }
+        .info {
+            color: #6b7280;
+            margin: 10px 0;
+        }
+        .button {
+            background: #3b82f6;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .button:hover {
+            background: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 Фандинг Арбитраж Бот</h1>
+        <div class="status">✅ Система работает!</div>
+        
+        <div class="info">
+            <p><strong>Статус:</strong> Онлайн</p>
+            <p><strong>Версия:</strong> 2.0 (с админ панелью)</p>
+            <p><strong>Время:</strong> <span id="time"></span></p>
+        </div>
+        
+        <div style="margin: 30px 0;">
+            <a href="/" class="button">🏠 Главная страница</a>
+            <a href="/test.html" class="button" onclick="location.reload()">🔄 Обновить</a>
+        </div>
+        
+        <div class="info">
+            <h3>🔧 Возможные проблемы:</h3>
+            <ul style="text-align: left; max-width: 500px; margin: 0 auto;">
+                <li>Очистите кэш браузера (Ctrl+F5)</li>
+                <li>Попробуйте режим инкогнито</li>
+                <li>Проверьте блокировщики рекламы</li>
+                <li>Убедитесь, что JavaScript включен</li>
+            </ul>
+        </div>
+        
+        <div class="info" style="margin-top: 30px;">
+            <p>Если проблемы продолжаются, обратитесь к администратору</p>
+        </div>
+    </div>
+    
+    <script>
+        // Показываем текущее время
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('time').textContent = now.toLocaleString('ru-RU');
+        }
+        updateTime();
+        setInterval(updateTime, 1000);
+        
+        // Проверяем загрузку основного приложения
+        setTimeout(() => {
+            if (window.location.pathname === '/test.html') {
+                console.log('Тестовая страница загружена успешно');
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

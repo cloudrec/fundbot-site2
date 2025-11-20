@@ -1,0 +1,380 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from '@/hooks/use-toast';
+import { 
+  Users, 
+  CreditCard, 
+  Settings, 
+  TrendingUp, 
+  DollarSign,
+  UserCheck,
+  UserX,
+  Crown,
+  Calendar,
+  Activity,
+  AlertCircle
+} from 'lucide-react';
+
+interface User {
+  id: string;
+  email: string;
+  created_at: string;
+  user_profiles: {
+    username: string;
+    subscription_plan: string;
+    subscription_status: string;
+    subscription_expires_at: string;
+    is_admin: boolean;
+    max_exchanges: number;
+    max_daily_trades: number;
+  };
+}
+
+interface Payment {
+  id: string;
+  amount_usd: number;
+  currency: string;
+  amount_crypto: number;
+  status: string;
+  created_at: string;
+  paid_at: string;
+  user_id: string;
+  subscription_plans: {
+    name: string;
+  };
+}
+
+interface Plan {
+  id: string;
+  name: string;
+  description: string;
+  price_usd: number;
+  price_crypto: any;
+  duration_days: number;
+  max_exchanges: number;
+  max_daily_trades: number;
+  features: string[];
+  is_active: boolean;
+}
+
+export default function AdminPanel() {
+  const { user, isAdmin } = useAuth();
+  const [users, setUsers] = useState<User[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    activeSubscriptions: 0,
+    totalRevenue: 0,
+    pendingPayments: 0
+  });
+
+  useEffect(() => {
+    if (isAdmin) {
+      loadAdminData();
+    }
+  }, [isAdmin]);
+
+  const loadAdminData = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([
+        loadUsers(),
+        loadPayments(),
+        loadPlans(),
+        loadStats()
+      ]);
+    } catch (error) {
+      console.error('Error loading admin data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select(`
+        user_id,
+        username,
+        subscription_plan,
+        subscription_status,
+        subscription_expires_at,
+        is_admin,
+        max_exchanges,
+        max_daily_trades,
+        auth.users!inner(id, email, created_at)
+      `)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    setUsers(data || []);
+  };
+
+  const loadPayments = async () => {
+    const { data, error } = await supabase
+      .from('payments')
+      .select(`
+        *,
+        subscription_plans(name)
+      `)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+    setPayments(data || []);
+  };
+
+  const loadPlans = async () => {
+    const { data, error } = await supabase
+      .from('subscription_plans')
+      .select('*')
+      .order('price_usd', { ascending: true });
+
+    if (error) throw error;
+    setPlans(data || []);
+  };
+
+  const loadStats = async () => {
+    // Get total users
+    const { count: totalUsers } = await supabase
+      .from('user_profiles')
+      .select('*', { count: 'exact', head: true });
+
+    // Get active subscriptions
+    const { count: activeSubscriptions } = await supabase
+      .from('user_profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('subscription_status', 'active');
+
+    // Get total revenue
+    const { data: revenueData } = await supabase
+      .from('payments')
+      .select('amount_usd')
+      .eq('status', 'completed');
+
+    const totalRevenue = revenueData?.reduce((sum, payment) => sum + payment.amount_usd, 0) || 0;
+
+    // Get pending payments
+    const { count: pendingPayments } = await supabase
+      .from('payments')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+
+    setStats({
+      totalUsers: totalUsers || 0,
+      activeSubscriptions: activeSubscriptions || 0,
+      totalRevenue,
+      pendingPayments: pendingPayments || 0
+    });
+  };
+
+  const updateUserSubscription = async (userId: string, planName: string, days: number) => {
+    try {
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + days);
+
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          subscription_plan: planName,
+          subscription_status: 'active',
+          subscription_expires_at: expiresAt.toISOString()
+        })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Подписка обновлена",
+        description: `Пользователю назначен план "${planName}" на ${days} дней`,
+      });
+
+      loadUsers();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const toggleUserAdmin = async (userId: string, isCurrentlyAdmin: boolean) => {
+    try {
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({ is_admin: !isCurrentlyAdmin })
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Права обновлены",
+        description: `Пользователь ${!isCurrentlyAdmin ? 'получил' : 'лишен'} прав администратора`,
+      });
+
+      loadUsers();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  const updatePlan = async (planId: string, updates: Partial<Plan>) => {
+    try {
+      const { error } = await supabase
+        .from('subscription_plans')
+        .update(updates)
+        .eq('id', planId);
+
+      if (error) throw error;
+
+      toast({
+        title: "План обновлен",
+        description: "Тарифный план успешно обновлен",
+      });
+
+      loadPlans();
+    } catch (error: any) {
+      toast({
+        title: "Ошибка",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  };
+
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <Card className="bg-gray-800 border-gray-700">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-white mb-2">Доступ запрещен</h2>
+            <p className="text-gray-400">У вас нет прав администратора</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="container mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent mb-2">
+            👑 Админ панель
+          </h1>
+          <p className="text-gray-400">Управление пользователями, тарифами и платежами</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <Card className="bg-gray-800 border-gray-700">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-400">Всего пользователей</p>
+                  <p className="text-2xl font-bold">{stats.totalUsers}</p>
+                </div>
+                <Users className="h-8 w-8 text-blue-400" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gray-800 border-gray-700">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-400">Активных подписок</p>
+                  <p className="text-2xl font-bold text-green-400">{stats.activeSubscriptions}</p>
+                </div>
+                <UserCheck className="h-8 w-8 text-green-400" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gray-800 border-gray-700">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-400">Общий доход</p>
+                  <p className="text-2xl font-bold text-green-400">${stats.totalRevenue.toFixed(2)}</p>
+                </div>
+                <DollarSign className="h-8 w-8 text-green-400" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gray-800 border-gray-700">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-400">Ожидающих оплаты</p>
+                  <p className="text-2xl font-bold text-yellow-400">{stats.pendingPayments}</p>
+                </div>
+                <CreditCard className="h-8 w-8 text-yellow-400" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="users" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-3 bg-gray-800">
+            <TabsTrigger value="users">Пользователи</TabsTrigger>
+            <TabsTrigger value="payments">Платежи</TabsTrigger>
+            <TabsTrigger value="plans">Тарифы</TabsTrigger>
+          </TabsList>
+
+          {/* Users Tab */}
+          <TabsContent value="users">
+            <Card className="bg-gray-800 border-gray-700">
+              <CardHeader>
+                <CardTitle>Управление пользователями</CardTitle>
+                <CardDescription>Просмотр и управление пользователями системы</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {users.map(user => (
+                    <div key={user.id} className="flex items-center justify-between p-4 bg-gray-700 rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div>
+                          <p className="font-semibold">{user.email}</p>
+                          <p className="text-sm text-gray-400">
+                            {user.user_profiles?.username || 'Без имени'}
+                          </p>
+                        </div>
+                        <div className="flex space-x-2">
+                          <Badge variant={user.user_profiles?.subscription_status === 'active' ? 'default' : 'secondary'}>
+                            {user.user_profiles?.subscription_plan || 'free'}
+                          </Badge>
+                          {user.user_profiles?.is_admin && (
+                            <Badge variant="destructive">
+                              <Crown className="h-3 w-3 mr-1" />
+                              Админ
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Select onValueChange={(value) => {
+                          const [plan, days] = value.split(':');
+                          updateUserSubscription(user.id, plan, parseInt(days));
+                        }}>
+                          <SelectTrigger className="w-40 bg-gray-600">
+                            <SelectValue placeholder="Назначить план" />
+                          </SelectTrigger>

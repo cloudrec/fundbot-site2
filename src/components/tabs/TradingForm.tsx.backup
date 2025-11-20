@@ -1,0 +1,489 @@
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from '@/hooks/use-toast';
+import { 
+  Play, 
+  Square, 
+  RefreshCw,
+  DollarSign,
+  Settings,
+  TestTube,
+  XCircle,
+  BarChart3,
+  Zap
+} from 'lucide-react';
+
+interface TradingFormProps {
+  selectedExchange: string;
+  onExchangeChange: (exchange: string) => void;
+  onTradingAction: (action: string, testMode?: boolean) => void;
+  currentBalance: any;
+  loading: boolean;
+  positions: any[];
+}
+
+const EXCHANGES = [
+  { value: 'bybit', label: 'Bybit', icon: '🟡' },
+  { value: 'binance', label: 'Binance', icon: '🟨' },
+  { value: 'gate', label: 'Gate.io', icon: '🟦' },
+  { value: 'kucoin', label: 'KuCoin', icon: '🟩' },
+  { value: 'okx', label: 'OKX', icon: '⚫' },
+  { value: 'mexc', label: 'MEXC', icon: '🔵' }
+];
+
+const TradingForm = ({ 
+  selectedExchange, 
+  onExchangeChange, 
+  onTradingAction, 
+  currentBalance, 
+  loading, 
+  positions 
+}: TradingFormProps) => {
+  const { user } = useAuth();
+  const [botRunning, setBotRunning] = useState(false);
+  
+  // Настройки торговли
+  const [settings, setSettings] = useState({
+    exchange: selectedExchange,
+    base_currency: 'BTC',
+    quote_currency: 'USDT',
+    order_amount_usd: 100,
+    leverage: 1,
+    take_profit_percent: 0.5,
+    stop_loss_percent: 1.0,
+    delay_ms: 5000,
+    order_timeout_minutes: 60,
+    auto_close_enabled: true,
+    max_holding_hours: 24,
+    min_funding_rate: 0.01
+  });
+
+  // Загрузка настроек при монтировании
+  useEffect(() => {
+    loadSettings();
+  }, []);
+
+  // Обновление exchange в настройках при изменении
+  useEffect(() => {
+    setSettings(prev => ({ ...prev, exchange: selectedExchange }));
+  }, [selectedExchange]);
+
+  const loadSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('trading_settings_2025_11_12_05_30')
+        .select('*')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        console.error('Ошибка загрузки настроек:', error);
+        return;
+      }
+      
+      if (data) {
+        setSettings(prev => ({ 
+          ...prev, 
+          ...data,
+          exchange: selectedExchange // Сохраняем текущую выбранную биржу
+        }));
+      }
+    } catch (error) {
+      console.error('Ошибка загрузки настроек:', error);
+    }
+  };
+
+  const saveSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('trading_settings_2025_11_12_05_30')
+        .upsert({
+          user_id: user?.id,
+          ...settings,
+          updated_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      
+      toast({
+        title: "✅ Настройки сохранены",
+        description: "Параметры торговли обновлены в базе данных",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ошибка сохранения",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const startBot = async () => {
+    try {
+      const symbol = `${settings.base_currency}${settings.quote_currency}`;
+      const { data, error } = await supabase.functions.invoke('funding_arbitrage_bot_2025_11_12_05_20', {
+        body: { 
+          action: 'start_funding_bot', 
+          ...settings,
+          symbol: symbol
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setBotRunning(true);
+        toast({
+          title: "🤖 Бот запущен",
+          description: data.message || "Фандинг-бот успешно запущен",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: "Ошибка запуска",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const stopBot = async () => {
+    try {
+      const { data, error } = await supabase.functions.invoke('funding_arbitrage_bot_2025_11_12_05_20', {
+        body: { action: 'stop_funding_bot' }
+      });
+
+      if (error) throw error;
+
+      setBotRunning(false);
+      toast({
+        title: "⏹️ Бот остановлен",
+        description: "Фандинг-бот успешно остановлен",
+      });
+    } catch (error: any) {
+      toast({
+        title: "Ошибка остановки",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSettingChange = (key: string, value: any) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
+    
+    // Автосохранение при изменении
+    setTimeout(() => {
+      saveSettings();
+    }, 1000);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Статус бота */}
+      <Card className="bg-gray-800 border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center justify-between">
+            <div className="flex items-center">
+              <BarChart3 className="h-5 w-5 mr-2" />
+              🤖 Статус Фандинг-Бота
+            </div>
+            <Badge variant={botRunning ? "default" : "secondary"}>
+              {botRunning ? "🟢 Активен" : "🔴 Остановлен"}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-300">Биржа:</span>
+              <Badge variant="outline">
+                {EXCHANGES.find(e => e.value === selectedExchange)?.icon} {selectedExchange.toUpperCase()}
+              </Badge>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-300">Позиций:</span>
+              <span className="text-white font-mono">{positions.length}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-gray-300">Следующий фандинг:</span>
+              <span className="text-white font-mono text-sm">
+                {new Date(Math.ceil(Date.now() / 3600000) * 3600000).toLocaleTimeString('ru-RU', { 
+                  hour: '2-digit', 
+                  minute: '2-digit' 
+                })}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Форма настроек торговли */}
+      <Card className="bg-gray-800 border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center">
+            <Settings className="h-5 w-5 mr-2" />
+            ⚙️ Параметры Входа в Сделку
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Биржа */}
+            <div>
+              <Label className="text-gray-300">Биржа</Label>
+              <Select value={settings.exchange} onValueChange={(value) => {
+                handleSettingChange('exchange', value);
+                onExchangeChange(value);
+              }}>
+                <SelectTrigger className="bg-gray-700 border-gray-600">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700">
+                  {EXCHANGES.map(exchange => (
+                    <SelectItem key={exchange.value} value={exchange.value}>
+                      {exchange.icon} {exchange.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Базовая валюта */}
+            <div>
+              <Label className="text-gray-300">Базовая валюта</Label>
+              <Input
+                value={settings.base_currency}
+                onChange={(e) => handleSettingChange('base_currency', e.target.value.toUpperCase())}
+                className="bg-gray-700 border-gray-600"
+                placeholder="BTC"
+              />
+            </div>
+
+            {/* Котируемая валюта */}
+            <div>
+              <Label className="text-gray-300">Котируемая валюта</Label>
+              <Input
+                value={settings.quote_currency}
+                onChange={(e) => handleSettingChange('quote_currency', e.target.value.toUpperCase())}
+                className="bg-gray-700 border-gray-600"
+                placeholder="USDT"
+              />
+            </div>
+
+            {/* Сумма ордера */}
+            <div>
+              <Label className="text-gray-300">Сумма ордера (USD)</Label>
+              <Input
+                type="number"
+                min="10"
+                max="10000"
+                value={settings.order_amount_usd}
+                onChange={(e) => handleSettingChange('order_amount_usd', Number(e.target.value))}
+                className="bg-gray-700 border-gray-600"
+              />
+            </div>
+
+            {/* Плечо */}
+            <div>
+              <Label className="text-gray-300">Плечо</Label>
+              <Select value={settings.leverage.toString()} onValueChange={(value) => handleSettingChange('leverage', Number(value))}>
+                <SelectTrigger className="bg-gray-700 border-gray-600">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700">
+                  {[1, 2, 3, 5, 10, 20, 50].map(lev => (
+                    <SelectItem key={lev} value={lev.toString()}>
+                      {lev}x
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Take Profit */}
+            <div>
+              <Label className="text-gray-300">Take Profit (%)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="5"
+                value={settings.take_profit_percent}
+                onChange={(e) => handleSettingChange('take_profit_percent', Number(e.target.value))}
+                className="bg-gray-700 border-gray-600"
+              />
+            </div>
+
+            {/* Stop Loss */}
+            <div>
+              <Label className="text-gray-300">Stop Loss (%)</Label>
+              <Input
+                type="number"
+                step="0.1"
+                min="0.1"
+                max="10"
+                value={settings.stop_loss_percent}
+                onChange={(e) => handleSettingChange('stop_loss_percent', Number(e.target.value))}
+                className="bg-gray-700 border-gray-600"
+              />
+            </div>
+
+            {/* Задержка */}
+            <div>
+              <Label className="text-gray-300">Задержка (мс)</Label>
+              <Input
+                type="number"
+                min="1000"
+                max="30000"
+                step="1000"
+                value={settings.delay_ms}
+                onChange={(e) => handleSettingChange('delay_ms', Number(e.target.value))}
+                className="bg-gray-700 border-gray-600"
+              />
+            </div>
+
+            {/* Таймаут ордера */}
+            <div>
+              <Label className="text-gray-300">Таймаут ордера (мин)</Label>
+              <Input
+                type="number"
+                min="5"
+                max="240"
+                value={settings.order_timeout_minutes}
+                onChange={(e) => handleSettingChange('order_timeout_minutes', Number(e.target.value))}
+                className="bg-gray-700 border-gray-600"
+              />
+            </div>
+
+            {/* Максимальное время удержания */}
+            <div>
+              <Label className="text-gray-300">Макс. удержание (ч)</Label>
+              <Input
+                type="number"
+                min="1"
+                max="72"
+                value={settings.max_holding_hours}
+                onChange={(e) => handleSettingChange('max_holding_hours', Number(e.target.value))}
+                className="bg-gray-700 border-gray-600"
+              />
+            </div>
+          </div>
+
+          <div className="flex space-x-2 mt-6">
+            <Button onClick={saveSettings} className="bg-blue-600 hover:bg-blue-700">
+              <Settings className="h-4 w-4 mr-2" />
+              Сохранить настройки
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Управление ботом и быстрые действия */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Управление ботом */}
+        <Card className="bg-gray-800 border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center">
+              <Zap className="h-5 w-5 mr-2" />
+              🎮 Управление Ботом
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {!botRunning ? (
+              <Button
+                onClick={startBot}
+                disabled={loading}
+                className="w-full bg-green-600 hover:bg-green-700"
+              >
+                <Play className="h-4 w-4 mr-2" />
+                Запустить бот
+              </Button>
+            ) : (
+              <Button
+                onClick={stopBot}
+                disabled={loading}
+                className="w-full bg-red-600 hover:bg-red-700"
+              >
+                <Square className="h-4 w-4 mr-2" />
+                Остановить бот
+              </Button>
+            )}
+            
+            <Button 
+              className="w-full bg-blue-600 hover:bg-blue-700" 
+              onClick={() => onTradingAction('test_order', true)}
+              disabled={loading}
+            >
+              <TestTube className="h-4 w-4 mr-2" />
+              Тестовый ордер
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Баланс и быстрые действия */}
+        <Card className="bg-gray-800 border-gray-700">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center">
+              <DollarSign className="h-5 w-5 mr-2" />
+              💰 Баланс и Действия
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {currentBalance ? (
+              <div className="space-y-2 mb-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">USDT:</span>
+                  <span className="text-white font-mono">{currentBalance.balance?.USDT?.toFixed(2) || '0.00'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Доступно:</span>
+                  <span className="text-green-400 font-mono">{currentBalance.balance?.available?.toFixed(2) || '0.00'}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-gray-400 mb-4">Нажмите "Проверить баланс"</p>
+            )}
+            
+            <Button 
+              className="w-full" 
+              onClick={() => onTradingAction('check_balance')}
+              disabled={loading}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Проверить баланс
+            </Button>
+            
+            <Button 
+              className="w-full bg-orange-600 hover:bg-orange-700" 
+              onClick={() => onTradingAction('cancel_all_orders')}
+              disabled={loading}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Отменить ордера
+            </Button>
+            
+            <Button 
+              className="w-full bg-red-600 hover:bg-red-700" 
+              onClick={() => onTradingAction('close_all_positions')}
+              disabled={loading}
+            >
+              <Square className="h-4 w-4 mr-2" />
+              Закрыть позиции
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default TradingForm;

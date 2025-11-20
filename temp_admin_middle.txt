@@ -1,0 +1,8 @@
+                          <SelectContent className="bg-gray-700">
+                            {subscriptionPlans.filter(plan => plan.is_active).map(plan => (
+                              <SelectItem key={plan.name} value={plan.name + ':30'}>
+                                {plan.name} (30д) - {plan.price_usd}$
+                              </SelectItem>
+                            ))}
+                            <SelectItem value="free:0">❌ Отменить подписку</SelectItem>
+                          </SelectContent>

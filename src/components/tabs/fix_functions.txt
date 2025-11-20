@@ -1,0 +1,28 @@
+      // Используем специальные функции для разных бирж
+      let functionName;
+      if (exchange === "bybit") {
+        functionName = "bybit_alternative_no_sign_url_2025_11_12_11_25";
+      } else if (exchange === "gate") {
+        functionName = "gate_wider_margins_v24_2025_11_09_18_25";
+      } else if (exchange === "kucoin") {
+        functionName = "kucoin_leverage_fixed_v27_2025_11_09_19_20";
+      } else if (exchange === "binance") {
+        functionName = "balance_mexc_spot_api_2025_11_12_18_15";
+      } else if (exchange === "mexc") {
+        functionName = "mexc_real_balance_checker_2025_11_14_09_17";
+      } else if (exchange === "okx") {
+        functionName = "okx_real_balance_checker_2025_11_14_09_17";
+      } else {
+        functionName = "balance_checker_bybit_v2_fixed_2025_11_12_10_50";
+      }
+      
+      let requestBody;
+      if (exchange === "gate") {
+        requestBody = { action: "get_balance", user_id: user?.id };
+      } else if (exchange === "kucoin") {
+        requestBody = { action: "get_balance", user_id: user?.id };
+      } else if (exchange === "binance" || exchange === "mexc" || exchange === "okx") {
+        requestBody = { user_id: user?.id, exchange: exchange };
+      } else {
+        requestBody = { action: "check_balance", exchange: exchange };
+      }

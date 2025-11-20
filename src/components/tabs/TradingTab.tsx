@@ -1,0 +1,1050 @@
+// CACHE BUSTER v2 - Wed Nov 12 23:04:24 UTC 2025
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast';
+
+const TradingTab = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [loading, setLoading] = useState<Record<string, boolean>>({});
+  const [balances, setBalances] = useState<Record<string, any>>({});
+  const [selectedExchange, setSelectedExchange] = useState('bybit');
+  
+  // Настройки торговли с полем задержки
+  const [tradingSettings, setTradingSettings] = useState<Record<string, any>>({
+    bybit: {
+      baseCurrency: 'BTC',
+      quoteCurrency: 'USDT',
+      orderAmount: '100',
+      leverage: '1',
+      side: 'buy',
+      stopLoss: '2',
+      takeProfit: '5',
+      delayMs: '1000',
+      isActive: false
+    },
+    binance: {
+      baseCurrency: 'BTC',
+      quoteCurrency: 'USDT',
+      orderAmount: '100',
+      leverage: '1',
+      side: 'buy',
+      stopLoss: '2',
+      takeProfit: '5',
+      delayMs: '1000',
+      isActive: false
+    },
+    gate: {
+      baseCurrency: 'BTC',
+      quoteCurrency: 'USDT',
+      orderAmount: '100',
+      leverage: '1',
+      side: 'buy',
+      stopLoss: '2',
+      takeProfit: '5',
+      delayMs: '1000',
+      isActive: false
+    },
+    huobi: {
+      baseCurrency: 'BTC',
+      quoteCurrency: 'USDT',
+      orderAmount: '100',
+      leverage: '1',
+      side: 'buy',
+      stopLoss: '2',
+      takeProfit: '5',
+      delayMs: '1000',
+      isActive: false
+    },
+    okx: {
+      baseCurrency: 'BTC',
+      quoteCurrency: 'USDT',
+      orderAmount: '100',
+      leverage: '1',
+      side: 'buy',
+      stopLoss: '2',
+      takeProfit: '5',
+      delayMs: '1000',
+      isActive: false
+    },
+    bitget: {
+      baseCurrency: 'BTC',
+      quoteCurrency: 'USDT',
+      orderAmount: '100',
+      leverage: '1',
+      side: 'buy',
+      stopLoss: '2',
+      takeProfit: '5',
+      delayMs: '1000',
+      isActive: false
+    }
+  });
+  const [futuresStates, setFuturesStates] = useState({ binance: false, bybit: false, gate: false, okx: false, bitget: false, htx: false });
+
+  const [orderForm, setOrderForm] = useState({
+    exchange: 'bybit',
+    symbol: "SUPERUSDT",
+    side: 'buy',
+    leverage: "10",
+    amount: "200",
+    stopLoss: '2',
+    takeProfit: '5',
+    delayMs: '1000'
+  });
+
+  const exchanges = [
+    { id: 'bybit', name: 'Bybit', icon: '🟡', color: 'bg-yellow-600' },
+    { id: 'binance', name: 'Binance', icon: '🟨', color: 'bg-orange-600' },
+    { id: 'gate', name: 'Gate.io', icon: '🟦', color: 'bg-blue-600' },
+    { id: 'huobi', name: 'Huobi (HTX)', icon: '🔴', color: 'bg-red-600' },
+    { id: 'okx', name: 'OKX', icon: '⚫', color: 'bg-gray-600' },
+    { id: 'bitget', name: 'Bitget', icon: '🟣', color: 'bg-purple-600' }
+  ];
+
+  useEffect(() => {
+    loadTradingSettings();
+  }, []);
+
+  // Загрузка переключателей из базы
+  useEffect(() => {
+    const loadFuturesFromDatabase = async () => {
+      if (!user?.id) return;
+      try {
+        const { data, error } = await supabase
+          .from("trading_settings_2025_11_12_05_30")
+          .select("exchange, is_active")
+          .eq("user_id", user.id);
+        if (error) {
+          console.error("❌ Ошибка загрузки:", error);
+          return;
+        }
+        if (data && data.length > 0) {
+          const newStates = { binance: false, bybit: false, gate: false, okx: false, bitget: false, htx: false };
+          data.forEach(item => {
+            if (newStates.hasOwnProperty(item.exchange)) {
+              newStates[item.exchange] = item.is_active || false;
+            }
+          });
+          console.log("✅ Загруженные переключатели:", newStates);
+          setFuturesStates(newStates);
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+          toast({
+            title: "✅ Переключатели загружены",
+            description: `Активных: ${Object.values(newStates).filter(Boolean).length}`,
+          });
+        }
+      } catch (error) {
+        console.error("❌ Ошибка загрузки:", error);
+      }
+    };
+    if (user?.id) loadFuturesFromDatabase();
+  }, [user]);
+
+  // Загрузка настроек торговли для всех бирж
+  const loadTradingSettings = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('trading_settings_2025_11_12_05_30')
+        .select('*')
+        .eq('user_id', user?.id);
+
+      if (error) throw error;
+
+      console.log('🔍 Загруженные настройки из БД:', data);
+
+      // Обновляем настройки для каждой биржи
+      if (data && data.length > 0) {
+        const newSettings = { ...tradingSettings };
+        data.forEach(setting => {
+          if (newSettings[setting.exchange]) {
+            newSettings[setting.exchange] = {
+              baseCurrency: setting.base_currency || 'BTC',
+              quoteCurrency: setting.quote_currency || 'USDT',
+              orderAmount: setting.order_amount || '100',
+              leverage: setting.leverage || '1',
+              side: setting.side || 'Buy',
+              stopLoss: setting.stop_loss || '2',
+              takeProfit: setting.take_profit || '5',
+              delayMs: setting.delay_ms || '1000',
+              isActive: setting.is_active || false
+            };
+          }
+        });
+        setTradingSettings(newSettings);
+        console.log('✅ Обновленные настройки:', newSettings);
+      }
+    } catch (error: any) {
+      console.error('❌ Ошибка загрузки настроек:', error);
+    }
+  };
+
+  // Сохранение настроек с полем задержки
+  const saveTradingSettings = async () => {
+    setLoading(prev => ({ ...prev, save: true }));
+    
+    try {
+      const currentSettings = tradingSettings[selectedExchange];
+      
+      console.log('💾 === НАЧАЛО СОХРАНЕНИЯ ===');
+      console.log('Биржа:', selectedExchange);
+      console.log('Stop Loss:', currentSettings?.stopLoss);
+      console.log('Take Profit:', currentSettings?.takeProfit);
+      console.log('⏱️ Задержка (мс):', currentSettings?.delayMs);
+      console.log('Все настройки:', currentSettings);
+      
+      if (!currentSettings?.stopLoss || !currentSettings?.takeProfit || !currentSettings?.delayMs) {
+        console.error('❌ ОШИБКА: Заполните все поля!');
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+        toast({
+          title: "Ошибка",
+          description: "Пожалуйста, заполните Stop Loss, Take Profit и Задержку",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Используем прямой upsert
+      const { error } = await supabase
+        .from('trading_settings_2025_11_12_05_30')
+        .upsert({
+price: orderForm.exchange === "gate" ? 30000 : undefined,          type: orderForm.exchange === "gate" ? "limit" : undefined,
+          user_id: user?.id,
+          exchange: selectedExchange,
+          base_currency: currentSettings.baseCurrency,
+          quote_currency: currentSettings.quoteCurrency,
+          order_amount: currentSettings.orderAmount,
+          leverage: currentSettings.leverage,
+          side: currentSettings.side,
+          stop_loss: currentSettings.stopLoss,
+          take_profit: currentSettings.takeProfit,
+          delay_ms: currentSettings.delayMs,
+          is_active: currentSettings.isActive,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,exchange'
+        });
+
+      if (error) {
+        console.error('❌ Ошибка прямого upsert:', error);
+        throw error;
+      }
+
+      console.log('✅ === УСПЕХ СОХРАНЕНИЯ ===');
+      console.log('Сохранено Stop Loss:', currentSettings.stopLoss);
+      console.log('Сохранено Take Profit:', currentSettings.takeProfit);
+      console.log('⏱️ Сохранена Задержка:', currentSettings.delayMs, 'мс');
+
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+      toast({
+        title: "Успех",
+        description: `Настройки сохранены: Stop Loss ${currentSettings.stopLoss}%, Take Profit ${currentSettings.takeProfit}%, Задержка ${currentSettings.delayMs}мс`,
+      });
+
+      // Перезагружаем настройки для проверки
+      setTimeout(() => {
+        console.log('🔄 Перезагружаем настройки для проверки...');
+        loadTradingSettings();
+      }, 500);
+
+    } catch (error: any) {
+      console.error('❌ Ошибка сохранения:', error);
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+      toast({
+        title: "Ошибка",
+        description: `Ошибка сохранения: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, save: false }));
+    }
+  };
+
+  // Загрузка балансов всех бирж
+  const loadAllBalances = async () => {
+    setLoading(prev => ({ ...prev, balances: true }));
+    
+    try {
+      const newBalances: Record<string, any> = {};
+      
+      for (const exchange of exchanges) {
+        try {
+      console.log("📡 ОТПРАВЛЯЕМ ЗАПРОС К EDGE FUNCTION");
+symbol: orderForm.exchange === "gate" ? orderForm.symbol.replace("USDT", "/USDT:USDT") : orderForm.symbol,
+      console.log("🔍 USER ID:", user?.id);
+          const { data, error } = await supabase.functions.invoke(getFunctionName(orderForm.exchange), {
+            body: { action: 'check_balance', exchange: exchange.id }
+          });
+
+      console.log("🔍 ПРОВЕРЯЕМ УСЛОВИЕ:", { hasData: !!data, hasSuccess: data?.success, fullData: data || null });
+          if (data && data.success) {
+            newBalances[exchange.id] = data.balance;
+          }
+        } catch (error) {
+          console.error(`Ошибка баланса ${exchange.id}:`, error);
+        }
+      }
+      
+      setBalances(newBalances);
+    } catch (error: any) {
+      console.error('Ошибка загрузки балансов:', error);
+    } finally {
+      setLoading(prev => ({ ...prev, balances: false }));
+    }
+  };
+
+  // Размещение тестового ордера с задержкой
+  // Функция выбора Edge Function по бирже
+  const getFunctionName = (exchange: string) => {
+    switch (exchange.toLowerCase()) {
+      case "bybit":
+        return "bybit_fixed_quantity_2025_11_13_23_50";
+      case "gate":
+        return "gate_proper_trading_2025_11_14_12_12";
+      case "binance":
+        return "binance_trading_orders_2025_11_14_11_20";
+      default:
+        return "bybit_fixed_quantity_2025_11_13_23_50";
+    }
+  };
+
+  const placeTestOrder = async () => {
+    setLoading(prev => ({ ...prev, order: true }));
+    
+    console.log("🚀 КНОПКА НАЖАТА! placeTestOrder вызвана");
+    try {
+      console.log("📡 ОТПРАВЛЯЕМ ЗАПРОС К EDGE FUNCTION");
+symbol: orderForm.exchange === "gate" ? orderForm.symbol.replace("USDT", "/USDT:USDT") : orderForm.symbol,
+      console.log("🔍 USER ID:", user?.id);
+      const { data, error } = await supabase.functions.invoke(getFunctionName(orderForm.exchange), {
+        body: { 
+          action: orderForm.exchange.toLowerCase() === "gate" ? "place_test_order" : (orderForm.exchange.toLowerCase() === "binance" ? "place_test_order" : "place_test_order"), 
+          exchange: orderForm.exchange.toLowerCase(),
+symbol: orderForm.exchange === "gate" ? orderForm.symbol.replace("USDT", "/USDT:USDT") : orderForm.symbol,
+          side: orderForm.side,
+          leverage: orderForm.leverage,
+          amount: orderForm.amount,
+          stopLoss: orderForm.stopLoss,
+          takeProfit: orderForm.takeProfit,
+          delayMs: orderForm.delayMs,
+price: orderForm.exchange === "gate" ? 30000 : undefined,          type: orderForm.exchange === "gate" ? "limit" : undefined,
+          user_id: user?.id
+        }
+      });
+      console.log("✅ ПОЛУЧЕН ОТВЕТ:", { data, error });
+      console.log("🔍 ДЕТАЛИ ОТВЕТА:", JSON.stringify(data, null, 2));
+
+      if (error) throw error;
+
+      console.log("🔍 ПРОВЕРЯЕМ УСЛОВИЕ:", { hasData: !!data, hasSuccess: data?.success, fullData: data || null });
+      if (data && data.success) {
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+        toast({
+          title: "Успех",
+          description: data.message || `Ордер размещен: ${data.order?.orderId}`,
+        });
+      } else {
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+        toast({
+          title: "Ошибка",
+          description: `Ошибка ордера: ${data?.error || "Неизвестная ошибка"}`,
+          variant: "destructive",
+        });
+      }
+      
+    } catch (error: any) {
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+      toast({
+        title: "Ошибка",
+        description: `Ошибка размещения ордера: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, order: false }));
+    }
+  };
+
+  // ТЕСТ: Обходной MEXC API (только для тестирования)
+  const testMexcBypass = async () => {
+    if (orderForm.exchange !== "mexc") {
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+      toast({
+        title: "Ошибка",
+        description: "Обходной API только для MEXC",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setLoading(prev => ({ ...prev, order: true }));
+    
+    try {
+      const { data, error } = await supabase.functions.invoke("mexc_bypass_futures_trading_2025_11_12_18_25", {
+        body: { 
+          action: "place_test_order",
+          exchange: "mexc",
+symbol: orderForm.exchange === "gate" ? orderForm.symbol.replace("USDT", "/USDT:USDT") : orderForm.symbol,
+          side: orderForm.side,
+          order_type: "LIMIT",
+          leverage: orderForm.leverage,
+          amount: orderForm.amount,
+          order_amount_usdt: orderForm.orderAmount,
+price: orderForm.exchange === "gate" ? 30000 : undefined,          type: orderForm.exchange === "gate" ? "limit" : undefined,
+          user_id: user?.id
+        }
+      });
+
+      if (error) throw error;
+
+      console.log("🔍 ПРОВЕРЯЕМ УСЛОВИЕ:", { hasData: !!data, hasSuccess: data?.success, fullData: data || null });
+      if (data && data.success) {
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+        toast({
+          title: "🎉 Обходной API работает!",
+          description: `MEXC Futures ордер: ${data.order_id || "успешно"}`,
+        });
+      } else {
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+        toast({
+          title: "Обходной API",
+          description: data.suggestion || data.error,
+          variant: "destructive",
+        });
+      }
+      
+    } catch (error: any) {
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+      toast({
+        title: "Тест обходного API",
+        description: `Результат: ${error.message}`,
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, order: false }));
+    }
+  };
+
+  // Переключение активности бота для выбранной биржи
+  const toggleBot = async () => {
+    const currentSettings = tradingSettings[selectedExchange];
+    const newActiveState = !currentSettings.isActive;
+    
+    // Обновляем локальное состояние
+    setTradingSettings(prev => ({
+      ...prev,
+      [selectedExchange]: {
+        ...prev[selectedExchange],
+        isActive: newActiveState
+      }
+    }));
+
+    // Сохраняем в базу данных
+    try {
+      const { error } = await supabase
+        .from('trading_settings_2025_11_12_05_30')
+        .upsert({
+price: orderForm.exchange === "gate" ? 30000 : undefined,          type: orderForm.exchange === "gate" ? "limit" : undefined,
+          user_id: user?.id,
+          exchange: selectedExchange,
+          base_currency: currentSettings.baseCurrency,
+          quote_currency: currentSettings.quoteCurrency,
+          order_amount: currentSettings.orderAmount,
+          leverage: currentSettings.leverage,
+          side: currentSettings.side,
+          stop_loss: currentSettings.stopLoss,
+          take_profit: currentSettings.takeProfit,
+          delay_ms: currentSettings.delayMs,
+          is_active: newActiveState,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,exchange'
+        });
+
+      if (error) throw error;
+
+      // Отправляем Telegram уведомление
+      try {
+        const leverageAmount = parseFloat(currentSettings.orderAmount) * parseFloat(currentSettings.leverage);
+        await supabase.functions.invoke('funding_arbitrage_bot_2025_11_12_05_20', {
+          body: { 
+            action: 'send_notification',
+            message: `🤖 Торговый бот ${newActiveState ? 'ЗАПУЩЕН' : 'ОСТАНОВЛЕН'} на ${selectedExchange}\n\n📊 Параметры:\n• Пара: ${currentSettings.baseCurrency}/${currentSettings.quoteCurrency}\n• Сторона: ${currentSettings.side === 'Buy' ? '🟢 Покупка' : '🔴 Продажа'}\n• Сумма ордера: ${currentSettings.orderAmount} USDT\n• Плечо: x${currentSettings.leverage}\n• Эффективная сумма: ${leverageAmount.toFixed(2)} USDT\n• Stop Loss: ${currentSettings.stopLoss}%\n• Take Profit: ${currentSettings.takeProfit}%\n• ⏱️ Задержка: ${currentSettings.delayMs}мс`
+          }
+        });
+      } catch (telegramError) {
+        console.error('Ошибка Telegram уведомления:', telegramError);
+      }
+
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+      toast({
+        title: newActiveState ? "Бот запущен" : "Бот остановлен",
+        description: `Торговый бот ${newActiveState ? 'активирован' : 'деактивирован'} на ${selectedExchange}`,
+      });
+
+    } catch (error: any) {
+      // Откатываем изменения при ошибке
+      setTradingSettings(prev => ({
+        ...prev,
+        [selectedExchange]: {
+          ...prev[selectedExchange],
+          isActive: currentSettings.isActive
+        }
+      }));
+
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+      toast({
+        title: "Ошибка",
+        description: `Ошибка переключения бота: ${error.message}`,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // Обновление настроек
+  const updateSetting = (key: string, value: string | boolean) => {
+    console.log(`🔧 Обновляем ${key} = "${value}" для биржи ${selectedExchange}`);
+    
+    setTradingSettings(prev => {
+      const newSettings = {
+        ...prev,
+        [selectedExchange]: {
+          ...prev[selectedExchange],
+          [key]: value
+        }
+      };
+      console.log('📝 Новое значение:', newSettings[selectedExchange][key]);
+      return newSettings;
+    });
+  };
+
+  const currentSettings = tradingSettings[selectedExchange];
+  const currentExchange = exchanges.find(ex => ex.id === selectedExchange);
+
+  // Расчет эффективной суммы с плечом
+  const effectiveAmount = parseFloat(currentSettings?.orderAmount || '100') * parseFloat(currentSettings?.leverage || '1');
+
+  return (
+    <div className="space-y-6">
+      {/* Информация об автоматической торговле */}
+      <Card className="bg-gray-800 border-gray-700 mb-6">
+        <CardHeader>
+          <CardTitle className="text-white">🤖 Автоматическая торговля</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+            <h4 className="text-blue-300 font-semibold mb-2">💡 Как управлять биржами для автоматической торговли:</h4>
+            <ol className="text-sm text-blue-200 space-y-1 ml-4">
+              <li>1. Выберите биржу в выпадающем списке ниже</li>
+              <li>2. Настройте параметры торговли</li>
+              <li>3. Включите "🟢 Активен" для участия в автоматической торговле</li>
+              <li>4. Сохраните настройки</li>
+              <li>5. Повторите для других бирж</li>
+            </ol>
+            <p className="text-sm text-blue-200 mt-3">
+              <strong>Кнопка автоматической торговли</strong> будет размещать ордеры только по биржам со статусом "🟢 Активен".
+          
+          <div className="mt-4 p-4 bg-gray-700 rounded-lg">
+            <h4 className="text-white font-semibold mb-3">🚀 Переключатели фьючерсов:</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+              {Object.entries({
+                binance: '🟡 Binance',
+                bybit: '🔵 Bybit', 
+                gate: '🟠 Gate.io',
+                okx: '⚫ OKX',
+                bitget: '🟢 Bitget',
+                htx: '🔴 Huobi (HTX)'
+              }).map(([key, label]) => (
+                <div key={key} className="flex items-center justify-between p-3 bg-gray-600 rounded-lg">
+                  <span className="text-white text-sm">{label}</span>
+                  <button
+                    onClick={() => {
+                      const newState = !futuresStates[key];
+                      const newStates = { ...futuresStates, [key]: newState };
+                      setFuturesStates(newStates);
+                      console.log(`💾 ${key}: ${newState}`);
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+                      toast({
+                        title: `✅ ${label} ${newState ? 'ВКЛ' : 'ВЫКЛ'}`,
+                        description: "Переключено",
+                      });
+                    }}
+                    className={`w-12 h-6 rounded-full transition-colors ${
+                      futuresStates[key] ? 'bg-green-500' : 'bg-gray-400'
+                    } relative`}
+                  >
+                    <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-transform ${
+                      futuresStates[key] ? 'translate-x-7' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={async () => {
+                  if (!user?.id) {
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+                    toast({
+                      title: "❌ Войдите в систему",
+                      description: "Необходима авторизация",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  
+                  console.log("💾 Сохранение в базу данных...");
+                  let saved = 0;
+                  
+                  for (const [exchange, isActive] of Object.entries(futuresStates)) {
+                    try {
+                      const { error } = await supabase
+                        .from("trading_settings_2025_11_12_05_30")
+                        .update({ is_active: isActive })
+                        .eq("user_id", user.id)
+                        .eq("exchange", exchange);
+                      
+                      if (!error) {
+                        console.log(`✅ ${exchange} сохранен`);
+                        saved++;
+                      } else {
+                        console.error(`❌ Ошибка ${exchange}:`, error);
+                      }
+                    } catch (e) {
+                      console.error(`❌ Критическая ошибка ${exchange}:`, e);
+                    }
+                  }
+                  
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+                  toast({
+                    title: `💾 Сохранено: ${saved}/6`,
+                    description: "Настройки записаны в базу данных",
+                  });
+                }}
+                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-semibold"
+              >
+                💾 Сохранить в базу
+              </button>
+            </div>
+            
+            <div className="mt-3 text-xs text-gray-400">
+              🎯 Лучшие биржи для фьючерсов: Binance (лидер), Bybit (низкие комиссии), OKX (ликвидность), Gate.io (много пар), Bitget (копи-трейдинг), Huobi HTX (Азия)
+            </div>
+          </div>
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Настройки торговли для выбранной биржи */}
+      <Card className="bg-gray-800 border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white flex items-center justify-between">
+            <span>⚙️ Настройки торговли</span>
+            <Badge variant={currentSettings?.isActive ? "default" : "secondary"}>
+              {currentSettings?.isActive ? "🟢 Активен" : "🔴 Остановлен"}
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Выбор биржи для настроек */}
+            <div>
+              <Label className="text-gray-300">Выберите биржу для настройки</Label>
+              <Select 
+                value={selectedExchange} 
+                onValueChange={(value) => setSelectedExchange(value)}
+              >
+                <SelectTrigger className="bg-gray-700 border-gray-600">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700">
+                  {exchanges.map(exchange => (
+                    <SelectItem key={exchange.id} value={exchange.id}>
+                      {exchange.icon} {exchange.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Кнопка проверки баланса */}
+            <div>
+              <Label className="text-gray-300">Проверка баланса</Label>
+              <Button
+                onClick={() => {
+                  console.log("🔍 Проверяем баланс для:", selectedExchange);
+                  
+                  supabase.functions.invoke("balance_mexc_spot_api_2025_11_12_18_15", {
+                    body: { 
+                      action: "check_balance",
+                      exchange: selectedExchange,
+price: orderForm.exchange === "gate" ? 30000 : undefined,          type: orderForm.exchange === "gate" ? "limit" : undefined,
+                      user_id: user?.id
+                    }
+                  })
+                  .then(({ data, error }) => {
+                    console.log("📊 Баланс API ответ:", data, error);
+                    if (error) throw error;
+                    
+      console.log("🔍 ПРОВЕРЯЕМ УСЛОВИЕ:", { hasData: !!data, hasSuccess: data?.success, fullData: data || null });
+                    if (data && data.success) {
+                      console.log("✅ Баланс получен:", data.balance, data.currency);
+                      setBalances(prev => ({ ...prev, [selectedExchange]: { balance: data.balance, currency: data.currency, status: "success" } }));
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+                      toast({
+                        title: "✅ " + selectedExchange.toUpperCase() + " Баланс",
+                        description: "💰 " + data.balance + " " + data.currency,
+                      });
+                    } else {
+                      console.log("❌ Ошибка данных:", data?.error);
+                      setBalances(prev => ({ ...prev, [selectedExchange]: { balance: "N/A", error: data?.error, status: "error" } }));
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+                      toast({
+                        title: "❌ " + selectedExchange.toUpperCase() + " Ошибка",
+                        description: data?.error || "Нет данных баланса",
+                        variant: "destructive",
+                      });
+                    }
+                  })
+                  .catch((error) => {
+                    console.error("❌ Полная ошибка баланса:", error);
+                    setBalances(prev => ({ ...prev, [selectedExchange]: { balance: "N/A", error: error.message, status: "error" } }));
+        console.log("🎯 ВЫЗЫВАЕМ TOAST!", { title: "Успех", description: data.message });
+                    toast({
+                      title: "❌ Ошибка получения баланса",
+                      description: error.message || "Неизвестная ошибка",
+                      variant: "destructive",
+                    });
+                  });
+                }}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+              >
+                💰 {balances[selectedExchange]?.status === "success" ? balances[selectedExchange].balance + " USDT" : "Проверить баланс"} {selectedExchange.toUpperCase()}
+              </Button>
+            </div>
+
+            {/* Базовая валюта */}
+            <div>
+              <Label className="text-gray-300">Базовая валюта</Label>
+              <Input
+                value={currentSettings?.baseCurrency || 'BTC'}
+                onChange={(e) => updateSetting('baseCurrency', e.target.value.toUpperCase())}
+                className="bg-gray-700 border-gray-600"
+                placeholder="BTC"
+              />
+            </div>
+
+            {/* Котируемая валюта */}
+            <div>
+              <Label className="text-gray-300">Котируемая валюта</Label>
+              <Select 
+                value={currentSettings?.quoteCurrency || 'USDT'} 
+                onValueChange={(value) => updateSetting('quoteCurrency', value)}
+              >
+                <SelectTrigger className="bg-gray-700 border-gray-600">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700">
+                  <SelectItem value="USDT">USDT</SelectItem>
+                  <SelectItem value="USDC">USDC</SelectItem>
+                  <SelectItem value="BUSD">BUSD</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Сторона */}
+            <div>
+              <Label className="text-gray-300">Сторона</Label>
+              <Select 
+                value={currentSettings?.side || 'Buy'} 
+                onValueChange={(value) => updateSetting('side', value)}
+              >
+                <SelectTrigger className="bg-gray-700 border-gray-600">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700">
+                  <SelectItem value="Buy">🟢 Покупка</SelectItem>
+                  <SelectItem value="Sell">🔴 Продажа</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Сумма ордера */}
+            <div>
+              <Label className="text-gray-300">Сумма ордера (USDT)</Label>
+              <Input
+                value={currentSettings?.orderAmount || '100'}
+                onChange={(e) => updateSetting('orderAmount', e.target.value)}
+                className="bg-gray-700 border-gray-600"
+                placeholder="100"
+              />
+            </div>
+
+            {/* Плечо */}
+            <div>
+              <Label className="text-gray-300">Плечо (x)</Label>
+              <Select 
+                value={currentSettings?.leverage || '1'} 
+                onValueChange={(value) => updateSetting('leverage', value)}
+              >
+                <SelectTrigger className="bg-gray-700 border-gray-600">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700">
+                  <SelectItem value="1">x1 (без плеча)</SelectItem>
+                  <SelectItem value="2">x2</SelectItem>
+                  <SelectItem value="3">x3</SelectItem>
+                  <SelectItem value="5">x5</SelectItem>
+                  <SelectItem value="10">x10</SelectItem>
+                  <SelectItem value="20">x20</SelectItem>
+                  <SelectItem value="50">x50</SelectItem>
+                  <SelectItem value="100">x100</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Stop Loss */}
+            <div>
+              <Label className="text-gray-300">Stop Loss (%)</Label>
+              <Input
+                value={currentSettings?.stopLoss || ''}
+                onChange={(e) => {
+                  console.log('🔴 Stop Loss изменен на:', e.target.value);
+                  updateSetting('stopLoss', e.target.value);
+                }}
+                className="bg-gray-700 border-gray-600"
+                placeholder="Введите Stop Loss"
+              />
+              <div className="text-xs text-gray-400 mt-1">
+                Текущее значение: {currentSettings?.stopLoss || 'не задано'}
+              </div>
+            </div>
+
+            {/* Take Profit */}
+            <div>
+              <Label className="text-gray-300">Take Profit (%)</Label>
+              <Input
+                value={currentSettings?.takeProfit || ''}
+                onChange={(e) => {
+                  console.log('🟢 Take Profit изменен на:', e.target.value);
+                  updateSetting('takeProfit', e.target.value);
+                }}
+                className="bg-gray-700 border-gray-600"
+                placeholder="Введите Take Profit"
+              />
+              <div className="text-xs text-gray-400 mt-1">
+                Текущее значение: {currentSettings?.takeProfit || 'не задано'}
+              </div>
+            </div>
+
+            {/* НОВОЕ ПОЛЕ: Задержка в миллисекундах */}
+            <div>
+              <Label className="text-gray-300">⏱️ Задержка входа (мс)</Label>
+              <Input
+                value={currentSettings?.delayMs || ''}
+                onChange={(e) => {
+                  console.log('⏱️ Задержка изменена на:', e.target.value);
+                  updateSetting('delayMs', e.target.value);
+                }}
+                className="bg-gray-700 border-gray-600"
+                placeholder="Введите задержку в миллисекундах"
+              />
+              <div className="text-xs text-gray-400 mt-1">
+                Текущее значение: {currentSettings?.delayMs || 'не задано'} мс
+              </div>
+            </div>
+          </div>
+
+          {/* Расчет эффективной суммы */}
+          <div className="bg-gray-700 p-4 rounded">
+            <h4 className="text-white font-semibold mb-2">💰 Расчет позиции:</h4>
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
+              <div>
+                <div className="text-gray-300">Сторона:</div>
+                <div className={`font-mono ${currentSettings?.side === 'Buy' ? 'text-green-400' : 'text-red-400'}`}>
+                  {currentSettings?.side === 'Buy' ? '🟢 Покупка' : '🔴 Продажа'}
+                </div>
+              </div>
+              <div>
+                <div className="text-gray-300">Сумма ордера:</div>
+                <div className="text-white font-mono">{currentSettings?.orderAmount || '100'} USDT</div>
+              </div>
+              <div>
+                <div className="text-gray-300">Плечо:</div>
+                <div className="text-yellow-400 font-mono">x{currentSettings?.leverage || '1'}</div>
+              </div>
+              <div>
+                <div className="text-gray-300">Эффективная сумма:</div>
+                <div className="text-green-400 font-mono font-bold">{effectiveAmount.toFixed(2)} USDT</div>
+              </div>
+              <div>
+                <div className="text-gray-300">Торговая пара:</div>
+                <div className="text-blue-400 font-mono">{currentSettings?.baseCurrency || 'BTC'}/{currentSettings?.quoteCurrency || 'USDT'}</div>
+              </div>
+              <div>
+                <div className="text-gray-300">⏱️ Задержка:</div>
+                <div className="text-purple-400 font-mono">{currentSettings?.delayMs || '1000'} мс</div>
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <div className="text-gray-300">Stop Loss:</div>
+                <div className="text-red-400 font-mono">{currentSettings?.stopLoss || 'не задано'}%</div>
+              </div>
+              <div>
+                <div className="text-gray-300">Take Profit:</div>
+                <div className="text-green-400 font-mono">{currentSettings?.takeProfit || 'не задано'}%</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex space-x-3">
+            <Button
+              onClick={saveTradingSettings}
+              disabled={loading.save}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {loading.save ? '🔄 Сохранение...' : '💾 Сохранить настройки'}
+            </Button>
+
+            <Button
+              onClick={toggleBot}
+              className={currentSettings?.isActive ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
+            >
+              {currentSettings?.isActive ? "🛑 Остановить бота" : "▶️ Запустить бота"}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+
+      {/* Тестовый ордер с полем задержки */}
+      <Card className="bg-gray-800 border-gray-700">
+        <CardHeader>
+          <CardTitle className="text-white">📝 Тестовый ордер</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Выбор биржи для ордера */}
+            <div>
+              <Label className="text-gray-300">Биржа</Label>
+              <Select 
+                value={orderForm.exchange} 
+                onValueChange={(value) => setOrderForm(prev => ({ ...prev, exchange: value }))}
+              >
+                <SelectTrigger className="bg-gray-700 border-gray-600">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700">
+                  {exchanges.map(exchange => (
+                    <SelectItem key={exchange.id} value={exchange.id}>
+                      {exchange.icon} {exchange.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-gray-300">Торговая пара</Label>
+              <Input
+                value={orderForm.symbol}
+                onChange={(e) => setOrderForm(prev => ({ ...prev, symbol: e.target.value }))}
+                className="bg-gray-700 border-gray-600"
+                placeholder="BTCUSDT"
+              />
+            </div>
+
+            <div>
+              <Label className="text-gray-300">Сторона</Label>
+              <Select 
+                value={orderForm.side} 
+                onValueChange={(value) => setOrderForm(prev => ({ ...prev, side: value }))}
+              >
+                <SelectTrigger className="bg-gray-700 border-gray-600">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-gray-700">
+                  <SelectItem value="Buy">🟢 Покупка</SelectItem>
+                  <SelectItem value="Sell">🔴 Продажа</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-gray-300">Плечо</Label>
+              <Input
+                value={orderForm.leverage}
+                onChange={(e) => setOrderForm(prev => ({ ...prev, leverage: e.target.value }))}
+                className="bg-gray-700 border-gray-600"
+                placeholder="10"
+              />
+            </div>
+
+            <div>
+              <Label className="text-gray-300">Сумма (USDT)</Label>
+              <Input
+                value={orderForm.amount}
+                onChange={(e) => setOrderForm(prev => ({ ...prev, amount: e.target.value }))}
+                className="bg-gray-700 border-gray-600"
+                placeholder="100"
+              />
+            </div>
+
+            {/* Stop Loss для тестового ордера */}
+            <div>
+              <Label className="text-gray-300">Stop Loss (%)</Label>
+              <Input
+                value={orderForm.stopLoss}
+                onChange={(e) => setOrderForm(prev => ({ ...prev, stopLoss: e.target.value }))}
+                className="bg-gray-700 border-gray-600"
+                placeholder="Введите Stop Loss"
+              />
+            </div>
+
+            {/* Take Profit для тестового ордера */}
+            <div>
+              <Label className="text-gray-300">Take Profit (%)</Label>
+              <Input
+                value={orderForm.takeProfit}
+                onChange={(e) => setOrderForm(prev => ({ ...prev, takeProfit: e.target.value }))}
+                className="bg-gray-700 border-gray-600"
+                placeholder="Введите Take Profit"
+              />
+            </div>
+
+            {/* НОВОЕ ПОЛЕ: Задержка для тестового ордера */}
+            <div>
+              <Label className="text-gray-300">⏱️ Задержка входа (мс)</Label>
+              <Input
+                value={orderForm.delayMs}
+                onChange={(e) => setOrderForm(prev => ({ ...prev, delayMs: e.target.value }))}
+                className="bg-gray-700 border-gray-600"
+                placeholder="Введите задержку в миллисекундах"
+              />
+            </div>
+          </div>
+
+          <div className="flex space-x-3">
+            <Button
+              onClick={placeTestOrder}
+              disabled={loading.order}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+{loading.order ? "🔄 Размещение..." : "📝 Разместить боевой ордер"}            </Button>                        <Button              onClick={() => console.log("Закрытие позиций")}              className="bg-red-600 hover:bg-red-700"            >              🔒 Закрыть все позиции            </Button>                        <Button              onClick={() => console.log("Отмена ордеров")}              className="bg-orange-600 hover:bg-orange-700"            >              🚫 Отменить все ордера
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default TradingTab;
